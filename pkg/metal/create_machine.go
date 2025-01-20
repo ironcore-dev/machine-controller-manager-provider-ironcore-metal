@@ -214,11 +214,15 @@ func (d *metalDriver) applyServerClaim(ctx context.Context, req *driver.CreateMa
 		},
 	}
 
-	if err := d.metalClient.Patch(ctx, serverClaim, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
+	d.clientProvider.Lock()
+	defer d.clientProvider.Unlock()
+	metalClient := d.clientProvider.Client
+
+	if err := metalClient.Patch(ctx, serverClaim, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error applying metal machine: %s", err.Error()))
 	}
 
-	if err := d.metalClient.Patch(ctx, ignitionSecret, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
+	if err := metalClient.Patch(ctx, ignitionSecret, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error applying ignition secret: %s", err.Error()))
 	}
 

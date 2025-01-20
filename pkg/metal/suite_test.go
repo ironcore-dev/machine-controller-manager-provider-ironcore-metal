@@ -138,7 +138,7 @@ func SetupTest() (*corev1.Namespace, *corev1.Secret, *driver.Driver) {
 		}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
-		drv = NewDriver(userClient, ns.Name, "")
+		drv = NewDriver(&ClientProvider{Client: userClient}, ns.Name, "")
 	})
 
 	return ns, secret, &drv

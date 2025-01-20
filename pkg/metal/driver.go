@@ -30,7 +30,7 @@ var (
 
 type metalDriver struct {
 	Schema         *runtime.Scheme
-	metalClient    client.Client
+	clientProvider *ClientProvider
 	metalNamespace string
 	csiDriverName  string
 }
@@ -44,9 +44,9 @@ func (d *metalDriver) GetVolumeIDs(_ context.Context, req *driver.GetVolumeIDsRe
 }
 
 // NewDriver returns a new Gardener metal driver object
-func NewDriver(c client.Client, namespace, csiDriverName string) driver.Driver {
+func NewDriver(cp *ClientProvider, namespace, csiDriverName string) driver.Driver {
 	return &metalDriver{
-		metalClient:    c,
+		clientProvider: cp,
 		metalNamespace: namespace,
 		csiDriverName:  csiDriverName,
 	}
@@ -59,7 +59,9 @@ func (d *metalDriver) GenerateMachineClassForMigration(_ context.Context, _ *dri
 func (d *metalDriver) getIgnitionNameForMachine(ctx context.Context, machineName string) string {
 	//for backward compatibility checking if ignition secret was already present with old naming convention
 	ignitionSecretName := fmt.Sprintf("%s-%s", machineName, "ignition")
-	if err := d.metalClient.Get(ctx, client.ObjectKey{Name: ignitionSecretName, Namespace: d.metalNamespace}, &corev1.Secret{}); apierrors.IsNotFound(err) {
+	d.clientProvider.Lock()
+	defer d.clientProvider.Unlock()
+	if err := d.clientProvider.Client.Get(ctx, client.ObjectKey{Name: ignitionSecretName, Namespace: d.metalNamespace}, &corev1.Secret{}); apierrors.IsNotFound(err) {
 		return machineName
 	}
 	return ignitionSecretName

@@ -55,7 +55,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	drv := metal.NewDriver(metalClient, namespace, CSIDriverName)
+	drv := metal.NewDriver(&metal.ClientProvider{Client: metalClient}, namespace, CSIDriverName)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)

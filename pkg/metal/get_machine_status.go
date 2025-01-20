@@ -30,7 +30,10 @@ func (d *metalDriver) GetMachineStatus(ctx context.Context, req *driver.GetMachi
 	defer klog.V(3).Infof("Machine status request has been processed for %q", req.Machine.Name)
 
 	serverClaim := &metalv1alpha1.ServerClaim{}
-	if err := d.metalClient.Get(ctx, client.ObjectKey{Namespace: d.metalNamespace, Name: req.Machine.Name}, serverClaim); err != nil {
+
+	d.clientProvider.Lock()
+	defer d.clientProvider.Unlock()
+	if err := d.clientProvider.Client.Get(ctx, client.ObjectKey{Namespace: d.metalNamespace, Name: req.Machine.Name}, serverClaim); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, status.Error(codes.NotFound, err.Error())
 		}

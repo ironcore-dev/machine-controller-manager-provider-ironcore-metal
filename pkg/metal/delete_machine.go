@@ -42,7 +42,11 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 		},
 	}
 
-	if err := d.metalClient.Delete(ctx, ignitionSecret); client.IgnoreNotFound(err) != nil {
+	d.clientProvider.Lock()
+	defer d.clientProvider.Unlock()
+	metalClient := d.clientProvider.Client
+
+	if err := metalClient.Delete(ctx, ignitionSecret); client.IgnoreNotFound(err) != nil {
 		// Unknown leads to short retry in machine controller
 		return nil, status.Error(codes.Unknown, fmt.Sprintf("error deleting ignition secret: %s", err.Error()))
 	}
@@ -66,7 +70,7 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 		},
 	}
 
-	if err := d.metalClient.Delete(ctx, serverClaim); err != nil {
+	if err := metalClient.Delete(ctx, serverClaim); err != nil {
 		if !apierrors.IsNotFound(err) {
 			// Unknown leads to short retry in machine controller
 			return nil, status.Error(codes.Unknown, fmt.Sprintf("error deleting pod: %s", err.Error()))
@@ -78,7 +82,7 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 	// do so. If we would not wait until the server claim is gone it might happen that the kubelet could re-register the Node
 	// object even after it was already deleted by machine-controller-manager.
 	if err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
-		if err := d.metalClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim); err != nil {
+		if err := metalClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim); err != nil {
 			if apierrors.IsNotFound(err) {
 				return true, nil
 			}
