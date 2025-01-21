@@ -36,15 +36,19 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 	defer klog.V(3).Infof("Machine deletion request has been processed for %q", req.Machine.Name)
 
 	d.clientProvider.Lock()
-	defer d.clientProvider.Unlock()
+	providerNamespace := d.clientProvider.Namespace
+	d.clientProvider.Unlock()
+
 	ignitionSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      d.getIgnitionNameForMachine(ctx, req.Machine.Name),
-			Namespace: d.clientProvider.Namespace,
+			Namespace: providerNamespace,
 		},
 	}
 
+	d.clientProvider.Lock()
 	metalClient := d.clientProvider.Client
+	defer d.clientProvider.Unlock()
 
 	if err := metalClient.Delete(ctx, ignitionSecret); client.IgnoreNotFound(err) != nil {
 		// Unknown leads to short retry in machine controller
@@ -66,7 +70,7 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 	serverClaim := &metalv1alpha1.ServerClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Machine.Name,
-			Namespace: d.clientProvider.Namespace,
+			Namespace: providerNamespace,
 		},
 	}
 
