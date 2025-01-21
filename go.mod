@@ -7,6 +7,7 @@ toolchain go1.23.1
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/coreos/butane v0.23.0
+	github.com/fsnotify/fsnotify v1.8.0
 	github.com/gardener/machine-controller-manager v0.55.0
 	github.com/imdario/mergo v0.3.16
 	github.com/ironcore-dev/controller-utils v0.9.7
@@ -43,7 +44,6 @@ require (
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
 	github.com/evanphx/json-patch v5.7.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
