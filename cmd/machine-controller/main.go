@@ -4,8 +4,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 
 	_ "github.com/gardener/machine-controller-manager/pkg/util/client/metrics/prometheus" // for client metric registration
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/app"
@@ -41,7 +43,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	clientProvider, err := metal.NewClientProvider(KubeconfigPath)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	clientProvider, err := metal.NewClientProvider(ctx, KubeconfigPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)

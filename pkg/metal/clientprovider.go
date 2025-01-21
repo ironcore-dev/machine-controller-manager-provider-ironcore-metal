@@ -4,6 +4,7 @@
 package metal
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -29,14 +30,14 @@ type ClientProvider struct {
 	kubeconfigPath string
 }
 
-func NewClientProvider(kubeconfigPath string) (*ClientProvider, error) {
+func NewClientProvider(ctx context.Context, kubeconfigPath string) (*ClientProvider, error) {
 	c := &ClientProvider{s: runtime.NewScheme(), kubeconfigPath: kubeconfigPath}
 	utilruntime.Must(scheme.AddToScheme(c.s))
 	utilruntime.Must(corev1.AddToScheme(c.s))
 	utilruntime.Must(metalv1alpha1.AddToScheme(c.s))
 	utilruntime.Must(ipamv1alpha1.AddToScheme(c.s))
 
-	if err := c.setMetalClientAndNamespaceWhenConfigIsChanged(); err != nil {
+	if err := c.setMetalClientAndNamespaceWhenConfigIsChanged(ctx); err != nil {
 		return nil, err
 	}
 	if err := c.setMetalClientAndNamespace(); err != nil {
@@ -54,8 +55,6 @@ func (cp *ClientProvider) Unlock() {
 }
 
 func (c *ClientProvider) setMetalClientAndNamespace() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	kubeconfigData, err := os.ReadFile(c.kubeconfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to read metal kubeconfig %s: %w", c.kubeconfigPath, err)
@@ -69,6 +68,8 @@ func (c *ClientProvider) setMetalClientAndNamespace() error {
 	if err != nil {
 		return fmt.Errorf("unable to get metal cluster rest config: %w", err)
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.Namespace, _, err = clientConfig.Namespace(); err != nil {
 		return fmt.Errorf("failed to get namespace from metal cluster kubeconfig: %w", err)
 	}
@@ -81,7 +82,7 @@ func (c *ClientProvider) setMetalClientAndNamespace() error {
 	return nil
 }
 
-func (c *ClientProvider) setMetalClientAndNamespaceWhenConfigIsChanged() error {
+func (c *ClientProvider) setMetalClientAndNamespaceWhenConfigIsChanged(ctx context.Context) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("unable to create kubeconfig watcher: %w", err)
@@ -104,6 +105,8 @@ func (c *ClientProvider) setMetalClientAndNamespaceWhenConfigIsChanged() error {
 				if err := c.setMetalClientAndNamespace(); err != nil {
 					log.Fatalf("couldn't update metal client when config has changed %v", err)
 				}
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()
