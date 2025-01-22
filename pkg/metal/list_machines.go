@@ -38,7 +38,7 @@ func (d *metalDriver) ListMachines(ctx context.Context, req *driver.ListMachines
 
 	d.clientProvider.Lock()
 	defer d.clientProvider.Unlock()
-	if err := d.clientProvider.Client.List(ctx, serverClaimList, client.InNamespace(d.clientProvider.Namespace), matchingLabels); err != nil {
+	if err := d.clientProvider.Client.List(ctx, serverClaimList, client.InNamespace(d.metalNamespace), matchingLabels); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 

@@ -45,13 +45,13 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	clientProvider, err := metal.NewClientProvider(ctx, KubeconfigPath)
+	clientProvider, namespace, err := metal.NewClientProviderAndNamespace(ctx, KubeconfigPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
-	drv := metal.NewDriver(clientProvider, CSIDriverName)
+	drv := metal.NewDriver(clientProvider, namespace, CSIDriverName)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)

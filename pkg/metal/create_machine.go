@@ -174,10 +174,6 @@ func (d *metalDriver) applyIgnition(ctx context.Context, req *driver.CreateMachi
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to create ignition file for machine %s: %v", req.Machine.Name, err))
 	}
 
-	d.clientProvider.Lock()
-	providerNamespace := d.clientProvider.Namespace
-	d.clientProvider.Unlock()
-
 	ignitionData := map[string][]byte{}
 	ignitionData["ignition"] = []byte(ignitionContent)
 	ignitionSecret := &corev1.Secret{
@@ -187,7 +183,7 @@ func (d *metalDriver) applyIgnition(ctx context.Context, req *driver.CreateMachi
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      d.getIgnitionNameForMachine(ctx, req.Machine.Name),
-			Namespace: providerNamespace,
+			Namespace: d.metalNamespace,
 		},
 		Data: ignitionData,
 	}
@@ -204,7 +200,7 @@ func (d *metalDriver) applyServerClaim(ctx context.Context, req *driver.CreateMa
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Machine.Name,
-			Namespace: providerNamespace,
+			Namespace: d.metalNamespace,
 			Labels:    providerSpec.Labels,
 		},
 		Spec: metalv1alpha1.ServerClaimSpec{

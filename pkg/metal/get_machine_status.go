@@ -33,7 +33,7 @@ func (d *metalDriver) GetMachineStatus(ctx context.Context, req *driver.GetMachi
 
 	d.clientProvider.Lock()
 	defer d.clientProvider.Unlock()
-	if err := d.clientProvider.Client.Get(ctx, client.ObjectKey{Namespace: d.clientProvider.Namespace, Name: req.Machine.Name}, serverClaim); err != nil {
+	if err := d.clientProvider.Client.Get(ctx, client.ObjectKey{Namespace: d.metalNamespace, Name: req.Machine.Name}, serverClaim); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, status.Error(codes.NotFound, err.Error())
 		}
