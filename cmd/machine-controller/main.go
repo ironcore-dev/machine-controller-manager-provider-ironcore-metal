@@ -4,10 +4,8 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"os/signal"
 
 	_ "github.com/gardener/machine-controller-manager/pkg/util/client/metrics/prometheus" // for client metric registration
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/app"
@@ -19,6 +17,7 @@ import (
 	"k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/logs"
 	logsv1 "k8s.io/component-base/logs/api/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 var (
@@ -43,9 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-	clientProvider, namespace, err := metal.NewClientProviderAndNamespace(ctx, KubeconfigPath)
+	clientProvider, namespace, err := metal.NewClientProviderAndNamespace(ctrl.SetupSignalHandler(), KubeconfigPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
