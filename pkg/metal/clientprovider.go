@@ -36,7 +36,7 @@ func NewClientProviderAndNamespace(ctx context.Context, kubeconfigPath string) (
 	utilruntime.Must(metalv1alpha1.AddToScheme(cp.s))
 	utilruntime.Must(ipamv1alpha1.AddToScheme(cp.s))
 
-	if err := cp.setMetalClientWhenConfigIsChanged(ctx); err != nil {
+	if err := cp.reloadMetalClientOnConfigChange(ctx); err != nil {
 		return nil, "", err
 	}
 
@@ -92,19 +92,21 @@ func (cp *ClientProvider) setMetalClient(clientConfig clientcmd.OverridingClient
 	}
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-	if cp.Client, err = client.New(restConfig, client.Options{Scheme: cp.s}); err != nil {
+	newClient, err := client.New(restConfig, client.Options{Scheme: cp.s})
+	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
+	cp.Client = newClient
 	return nil
 }
 
-func (cp *ClientProvider) setMetalClientWhenConfigIsChanged(ctx context.Context) error {
+func (cp *ClientProvider) reloadMetalClientOnConfigChange(ctx context.Context) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("unable to create kubeconfig watcher: %w", err)
 	}
-	err = watcher.Add(path.Dir(cp.kubeconfigPath))
-	if err != nil {
+
+	if err = watcher.Add(path.Dir(cp.kubeconfigPath)); err != nil {
 		watcher.Close()
 		return fmt.Errorf("unable to add kubeconfig \"%s\" to watcher: %v", cp.kubeconfigPath, err)
 	}
@@ -119,10 +121,13 @@ func (cp *ClientProvider) setMetalClientWhenConfigIsChanged(ctx context.Context)
 					continue
 				}
 
-				if clientConfig, err := cp.getClientConfig(); err != nil {
-					log.Fatalf("couldn't get client config when config has changed %v", err)
-				} else if err := cp.setMetalClient(clientConfig); err != nil {
-					log.Fatalf("couldn't update metal client when config has changed %v", err)
+				clientConfig, err := cp.getClientConfig()
+				if err != nil {
+					log.Printf("couldn't get client config when config changed: %v", err)
+					continue
+				}
+				if err := cp.setMetalClient(clientConfig); err != nil {
+					log.Printf("couldn't update metal client when config changed: %v", err)
 				}
 			case <-ctx.Done():
 				return
