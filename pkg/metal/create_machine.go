@@ -134,7 +134,7 @@ func (d *metalDriver) applyIPAddresses(ctx context.Context, req *driver.CreateMa
 				if err := metalClient.Get(ctx, ipAddrKey, ipAddr); err != nil {
 					return false, err
 				}
-				if ipAddr.Status.State == ipamv1alpha1.CFinishedIPState {
+				if ipAddr.Status.State == ipamv1alpha1.FinishedIPState {
 					return true, nil
 				}
 				return false, fmt.Errorf("ip address state is not finished: %s", ipAddr.Status.State)
