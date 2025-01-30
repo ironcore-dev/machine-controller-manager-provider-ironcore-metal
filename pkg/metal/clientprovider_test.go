@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -15,7 +16,6 @@ import (
 const kubeconfigStr = `apiVersion: v1
 clusters:
 - cluster:
-    certificate-authority-data: bW9kZTogc2V0CmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzoyOC4xMyw0MC42MiA5IDAKZ2l0aHViLmNvbS9pcm9uY29yZS1kZXYvbWFjaGluZS1jb250cm9sbGVyLW1hbmFnZXItcHJvdmlkZXItaXJvbmNvcmUtbWV0YWwvY21kL21hY2hpbmUtY29udHJvbGxlci9tYWluLmdvOjQwLjYyLDQzLjMgMiAwCmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzo0NS4yLDQ2LjE2IDIgMApnaXRodWIuY29tL2lyb25jb3JlLWRldi9tYWNoaW5lLWNvbnRyb2xsZXItbWFuYWdlci1wcm92aWRlci1pcm9uY29yZS1tZXRhbC9jbWQvbWFjaGluZS1jb250cm9sbGVyL21haW4uZ286NDYuMTYsNDkuMyAyIDAKZ2l0aHViLmNvbS9pcm9uY29yZS1kZXYvbWFjaGluZS1jb250cm9sbGVyLW1hbmFnZXItcHJvdmlkZXItaXJvbmNvcmUtbWV0YWwvY21kL21hY2hpbmUtY29udHJvbGxlci9tYWluLmdvOjUxLjIsNTIuMTYgMiAwCmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzo1Mi4xNiw1NS4zIDIgMApnaXRodWIuY29tL2lyb25jb3JlLWRldi9tYWNoaW5lLWNvbnRyb2xsZXItbWFuYWdlci1wcm92aWRlci1pcm9uY29yZS1tZXRhbC9jbWQvbWFjaGluZS1jb250cm9sbGVyL21haW4uZ286NTcuMiw1Ny40MCAxIDAKZ2l0aHViLmNvbS9pcm9uY29yZS1kZXYvbWFjaGluZS1jb250cm9sbGVyLW1hbmFnZXItcHJvdmlkZXItaXJvbmNvcmUtbWV0YWwvY21kL21hY2hpbmUtY29udHJvbGxlci9tYWluLmdvOjU3LjQwLDYwLjMgMiAwCmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzo2My4zOSw2NS4yIDEgMApnaXRodWIu
     server: https://127.0.0.1:123
   name: example-cluster
 contexts:
@@ -28,23 +28,15 @@ kind: Config
 users:
 - name: example-user
   user:
-    client-certificate-data: bW9kZTogc2V0CmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzoyOC4xMyw0MC42MiA5IDAKZ2l0aHViLmNvbS9pcm9uY29yZS1kZXYvbWFjaGluZS1jb250cm9sbGVyLW1hbmFnZXItcHJvdmlkZXItaXJvbmNvcmUtbWV0YWwvY21kL21hY2hpbmUtY29udHJvbGxlci9tYWluLmdvOjQwLjYyLDQzLjMgMiAwCmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzo0NS4yLDQ2LjE2IDIgMApnaXRodWIuY29tL2lyb25jb3JlLWRldi9tYWNoaW5lLWNvbnRyb2xsZXItbWFuYWdlci1wcm92aWRlci1pcm9uY29yZS1tZXRhbC9jbWQvbWFjaGluZS1jb250cm9sbGVyL21haW4uZ286NDYuMTYsNDkuMyAyIDAKZ2l0aHViLmNvbS9pcm9uY29yZS1kZXYvbWFjaGluZS1jb250cm9sbGVyLW1hbmFnZXItcHJvdmlkZXItaXJvbmNvcmUtbWV0YWwvY21kL21hY2hpbmUtY29udHJvbGxlci9tYWluLmdvOjUxLjIsNTIuMTYgMiAwCmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzo1Mi4xNiw1NS4zIDIgMApnaXRodWIuY29tL2lyb25jb3JlLWRldi9tYWNoaW5lLWNvbnRyb2xsZXItbWFuYWdlci1wcm92aWRlci1pcm9uY29yZS1tZXRhbC9jbWQvbWFjaGluZS1jb250cm9sbGVyL21haW4uZ286NTcuMiw1Ny40MCAxIDAKZ2l0aHViLmNvbS9pcm9uY29yZS1kZXYvbWFjaGluZS1jb250cm9sbGVyLW1hbmFnZXItcHJvdmlkZXItaXJvbmNvcmUtbWV0YWwvY21kL21hY2hpbmUtY29udHJvbGxlci9tYWluLmdvOjU3LjQwLDYwLjMgMiAwCmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzo2My4zOSw2NS4yIDEgMApnaXRodWIu
-    client-key-data: bW9kZTogc2V0CmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzoyOC4xMyw0MC42MiA5IDAKZ2l0aHViLmNvbS9pcm9uY29yZS1kZXYvbWFjaGluZS1jb250cm9sbGVyLW1hbmFnZXItcHJvdmlkZXItaXJvbmNvcmUtbWV0YWwvY21kL21hY2hpbmUtY29udHJvbGxlci9tYWluLmdvOjQwLjYyLDQzLjMgMiAwCmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzo0NS4yLDQ2LjE2IDIgMApnaXRodWIuY29tL2lyb25jb3JlLWRldi9tYWNoaW5lLWNvbnRyb2xsZXItbWFuYWdlci1wcm92aWRlci1pcm9uY29yZS1tZXRhbC9jbWQvbWFjaGluZS1jb250cm9sbGVyL21haW4uZ286NDYuMTYsNDkuMyAyIDAKZ2l0aHViLmNvbS9pcm9uY29yZS1kZXYvbWFjaGluZS1jb250cm9sbGVyLW1hbmFnZXItcHJvdmlkZXItaXJvbmNvcmUtbWV0YWwvY21kL21hY2hpbmUtY29udHJvbGxlci9tYWluLmdvOjUxLjIsNTIuMTYgMiAwCmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzo1Mi4xNiw1NS4zIDIgMApnaXRodWIuY29tL2lyb25jb3JlLWRldi9tYWNoaW5lLWNvbnRyb2xsZXItbWFuYWdlci1wcm92aWRlci1pcm9uY29yZS1tZXRhbC9jbWQvbWFjaGluZS1jb250cm9sbGVyL21haW4uZ286NTcuMiw1Ny40MCAxIDAKZ2l0aHViLmNvbS9pcm9uY29yZS1kZXYvbWFjaGluZS1jb250cm9sbGVyLW1hbmFnZXItcHJvdmlkZXItaXJvbmNvcmUtbWV0YWwvY21kL21hY2hpbmUtY29udHJvbGxlci9tYWluLmdvOjU3LjQwLDYwLjMgMiAwCmdpdGh1Yi5jb20vaXJvbmNvcmUtZGV2L21hY2hpbmUtY29udHJvbGxlci1tYW5hZ2VyLXByb3ZpZGVyLWlyb25jb3JlLW1ldGFsL2NtZC9tYWNoaW5lLWNvbnRyb2xsZXIvbWFpbi5nbzo2My4zOSw2NS4yIDEgMApnaXRodWIu
+    token: example-token
 `
 
 func wrap(test func(string, context.Context)) func() {
 	return func() {
-		dirName, err := os.MkdirTemp("/tmp", "client_provider_test")
-		Expect(err).ShouldNot(HaveOccurred())
-		defer func() {
-			err := os.RemoveAll(dirName)
-			Expect(err).ShouldNot(HaveOccurred())
-		}()
-
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
 
-		test(dirName, ctx)
+		test(GinkgoT().TempDir(), ctx)
 	}
 }
 
@@ -66,11 +58,44 @@ var _ = Describe("ClientProvider", func() {
 	When("kubeconfig file exists but it is empty", func() {
 		It("returns an error", wrap(func(dirName string, ctx context.Context) {
 			kubeconfig := path.Join(dirName, "kubeconfig")
-			Expect(os.WriteFile(kubeconfig, []byte(kubeconfigStr), 0644)).ShouldNot(HaveOccurred())
-			// cp, ns, err := NewClientProviderAndNamespace(ctx, path.Join(dirName, "kubeconfig"))
+			Expect(os.WriteFile(kubeconfig, []byte{}, 0644)).ShouldNot(HaveOccurred())
 			_, _, err := NewClientProviderAndNamespace(ctx, kubeconfig)
 			Expect(err).Should(HaveOccurred())
-			Expect(err.Error()).To(HavePrefix("unable to get metal cluster rest config:"))
+			Expect(err.Error()).To(HavePrefix("unable to get metal cluster rest config"))
 		}))
+	})
+
+	When("kubeconfig file exists with correct content", func() {
+		It("returns a default namespace and a client", wrap(func(dirName string, ctx context.Context) {
+			kubeconfig := path.Join(dirName, "kubeconfig")
+			Expect(os.WriteFile(kubeconfig, []byte(kubeconfigStr), 0644)).ShouldNot(HaveOccurred())
+			cp, ns, err := NewClientProviderAndNamespace(ctx, kubeconfig)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(ns).To(Equal("default"))
+			Expect(cp).NotTo(BeNil())
+		}))
+
+		When("kubeconfig file has changed", func() {
+			It("updates the client", wrap(func(dirName string, ctx context.Context) {
+				kubeconfig := path.Join(dirName, "kubeconfig")
+				Expect(os.WriteFile(kubeconfig, []byte(kubeconfigStr), 0644)).ShouldNot(HaveOccurred())
+				cp, _, err := NewClientProviderAndNamespace(ctx, kubeconfig)
+				Expect(err).ShouldNot(HaveOccurred())
+
+				cp.mu.Lock()
+				oldClient := cp.Client
+				cp.mu.Unlock()
+
+				newKubeconfigStr := strings.Replace(kubeconfigStr, "123", "321", 1)
+				Expect(os.WriteFile(kubeconfig, []byte(newKubeconfigStr), 0644)).ShouldNot(HaveOccurred())
+
+				Eventually(func(g Gomega) {
+					cp.mu.Lock()
+					newClient := cp.Client
+					cp.mu.Unlock()
+					g.Expect(newClient).NotTo(Equal(oldClient))
+				}).Should(Succeed())
+			}))
+		})
 	})
 })
