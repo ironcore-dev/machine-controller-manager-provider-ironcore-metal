@@ -58,7 +58,7 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 		},
 	}
 
-	if err := d.metalClient.Delete(ctx, ip); client.IgnoreNotFound(err) != nil {
+	if err := metalClient.Delete(ctx, ip); client.IgnoreNotFound(err) != nil {
 		// Unknown leads to short retry in machine controller
 		return nil, status.Error(codes.Unknown, fmt.Sprintf("error deleting ip resource: %s", err.Error()))
 	}

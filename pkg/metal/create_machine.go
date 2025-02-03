@@ -78,6 +78,10 @@ func isEmptyCreateRequest(req *driver.CreateMachineRequest) bool {
 func (d *metalDriver) applyIPAddresses(ctx context.Context, req *driver.CreateMachineRequest, providerSpec *apiv1alpha1.ProviderSpec) ([]map[string]any, error) {
 	var allAddressMetaData []map[string]any
 
+	d.clientProvider.Lock()
+	defer d.clientProvider.Unlock()
+	metalClient := d.clientProvider.Client
+
 	for _, networkRef := range providerSpec.IPAMConfig {
 		// check if IPAddress exists
 		ipAddr := &ipamv1alpha1.IP{}
@@ -87,7 +91,7 @@ func (d *metalDriver) applyIPAddresses(ctx context.Context, req *driver.CreateMa
 			Name:      ipAddrName,
 		}
 		var err error
-		if err = d.metalClient.Get(ctx, ipAddrKey, ipAddr); err != nil && !apierrors.IsNotFound(err) {
+		if err = metalClient.Get(ctx, ipAddrKey, ipAddr); err != nil && !apierrors.IsNotFound(err) {
 			return nil, err
 		}
 		if err == nil {
@@ -106,7 +110,7 @@ func (d *metalDriver) applyIPAddresses(ctx context.Context, req *driver.CreateMa
 				},
 				Spec: ipamv1alpha1.IPSpec{Subnet: subnetRef},
 			}
-			if err = d.metalClient.Create(ctx, ip); err != nil {
+			if err = metalClient.Create(ctx, ip); err != nil {
 				return nil, fmt.Errorf("error applying IP: %w", err)
 			}
 		}
@@ -117,7 +121,7 @@ func (d *metalDriver) applyIPAddresses(ctx context.Context, req *driver.CreateMa
 			time.Millisecond*340,
 			true,
 			func(ctx context.Context) (bool, error) {
-				if err := d.metalClient.Get(ctx, ipAddrKey, ipAddr); err != nil {
+				if err := metalClient.Get(ctx, ipAddrKey, ipAddr); err != nil {
 					return false, err
 				}
 				if ipAddr.Status.State == ipamv1alpha1.CFinishedIPState {
