@@ -67,6 +67,7 @@ var _ = BeforeSuite(func() {
 			modutils.Dir("github.com/gardener/machine-controller-manager", "kubernetes", "crds", "machine.sapcloud.io_machinesets.yaml"),
 			modutils.Dir("github.com/ironcore-dev/metal-operator", "config", "crd", "bases"),
 			modutils.Dir("github.com/ironcore-dev/ipam", "config", "crd", "bases"),
+			modutils.Dir("sigs.k8s.io/cluster-api", "config", "crd", "bases"),
 		},
 		ErrorIfCRDPathMissing: true,
 
