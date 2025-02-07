@@ -19,6 +19,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/scale/scheme"
 	"k8s.io/client-go/tools/clientcmd"
+	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -35,6 +36,7 @@ func NewProviderAndNamespace(ctx context.Context, kubeconfigPath string) (*Provi
 	utilruntime.Must(corev1.AddToScheme(cp.s))
 	utilruntime.Must(metalv1alpha1.AddToScheme(cp.s))
 	utilruntime.Must(ipamv1alpha1.AddToScheme(cp.s))
+	utilruntime.Must(capiv1beta1.AddToScheme(s))
 
 	if err := cp.reloadMetalClientOnConfigChange(ctx); err != nil {
 		return nil, "", err
