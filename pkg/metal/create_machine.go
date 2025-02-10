@@ -123,7 +123,7 @@ func (d *metalDriver) applyIPAddresses(ctx context.Context, req *driver.CreateMa
 				if ipAddr.Status.State == ipamv1alpha1.CFinishedIPState {
 					return true, nil
 				}
-				return false, nil
+				return false, fmt.Errorf("ip address state is not finished: %s", ipAddr.Status.State)
 			})
 		if err != nil {
 			return nil, fmt.Errorf("failed to wait for for ip to be finished: %w", err)
