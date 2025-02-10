@@ -16,6 +16,7 @@ import (
 	"github.com/ironcore-dev/controller-utils/modutils"
 	ipamv1alpha1 "github.com/ironcore-dev/ipam/api/ipam/v1alpha1"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
+	mcmclient "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/client"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -138,7 +139,7 @@ func SetupTest() (*corev1.Namespace, *corev1.Secret, *driver.Driver) {
 		}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
-		drv = NewDriver(&ClientProvider{Client: userClient, s: scheme.Scheme}, ns.Name, "")
+		drv = NewDriver(&mcmclient.ClientProvider{Client: userClient}, ns.Name, "")
 	})
 
 	return ns, secret, &drv

@@ -12,6 +12,7 @@ import (
 	mcmoptions "github.com/gardener/machine-controller-manager/pkg/util/provider/app/options"
 	_ "github.com/gardener/machine-controller-manager/pkg/util/reflector/prometheus" // for reflector metric registration
 	_ "github.com/gardener/machine-controller-manager/pkg/util/workqueue/prometheus" // for workqueue metric registration
+	mcmclient "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/client"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/metal"
 	"github.com/spf13/pflag"
 	"k8s.io/component-base/cli/flag"
@@ -42,7 +43,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	clientProvider, namespace, err := metal.NewClientProviderAndNamespace(ctrl.SetupSignalHandler(), KubeconfigPath)
+	clientProvider, namespace, err := mcmclient.NewClientProviderAndNamespace(ctrl.SetupSignalHandler(), KubeconfigPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)

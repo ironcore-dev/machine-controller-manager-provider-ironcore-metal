@@ -11,6 +11,7 @@ import (
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/codes"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/status"
 	apiv1alpha1 "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
+	mcmclient "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/client"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,7 +31,7 @@ var (
 
 type metalDriver struct {
 	Schema         *runtime.Scheme
-	clientProvider *ClientProvider
+	clientProvider *mcmclient.ClientProvider
 	metalNamespace string
 	csiDriverName  string
 }
@@ -44,7 +45,7 @@ func (d *metalDriver) GetVolumeIDs(_ context.Context, req *driver.GetVolumeIDsRe
 }
 
 // NewDriver returns a new Gardener metal driver object
-func NewDriver(cp *ClientProvider, namespace, csiDriverName string) driver.Driver {
+func NewDriver(cp *mcmclient.ClientProvider, namespace, csiDriverName string) driver.Driver {
 	return &metalDriver{
 		clientProvider: cp,
 		metalNamespace: namespace,
