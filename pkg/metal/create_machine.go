@@ -109,22 +109,22 @@ func (d *metalDriver) applyIPAddresses(ctx context.Context, req *driver.CreateMa
 			if err = d.metalClient.Create(ctx, ip); err != nil {
 				return nil, fmt.Errorf("error applying IP: %w", err)
 			}
-			// Wait for the IP address to reach the finished state
-			err = wait.PollUntilContextTimeout(
-				ctx,
-				time.Millisecond*50,
-				time.Millisecond*340,
-				true,
-				func(ctx context.Context) (bool, error) {
-					ipAddr.Status.State, err = ipamv1alpha1.CFinishedIPState, nil
-					if err != nil {
-						return false, nil
-					}
-					return true, nil
-				})
-			if err != nil {
-				return nil, fmt.Errorf("failed to wait for for ip to be finished: %w", err)
-			}
+		}
+		// Wait for the IP address to reach the finished state
+		err = wait.PollUntilContextTimeout(
+			ctx,
+			time.Millisecond*50,
+			time.Millisecond*340,
+			true,
+			func(ctx context.Context) (bool, error) {
+				ipAddr.Status.State, err = ipamv1alpha1.CFinishedIPState, nil
+				if err != nil {
+					return false, nil
+				}
+				return true, nil
+			})
+		if err != nil {
+			return nil, fmt.Errorf("failed to wait for for ip to be finished: %w", err)
 		}
 
 		// TODO: add net.IP validation
