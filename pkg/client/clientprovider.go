@@ -22,15 +22,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type ClientProvider struct {
+type Provider struct {
 	Client         client.Client
 	mu             sync.Mutex
 	s              *runtime.Scheme
 	kubeconfigPath string
 }
 
-func NewClientProviderAndNamespace(ctx context.Context, kubeconfigPath string) (*ClientProvider, string, error) {
-	cp := &ClientProvider{s: runtime.NewScheme(), kubeconfigPath: kubeconfigPath}
+func NewProviderAndNamespace(ctx context.Context, kubeconfigPath string) (*Provider, string, error) {
+	cp := &Provider{s: runtime.NewScheme(), kubeconfigPath: kubeconfigPath}
 	utilruntime.Must(scheme.AddToScheme(cp.s))
 	utilruntime.Must(corev1.AddToScheme(cp.s))
 	utilruntime.Must(metalv1alpha1.AddToScheme(cp.s))
@@ -54,18 +54,18 @@ func NewClientProviderAndNamespace(ctx context.Context, kubeconfigPath string) (
 	return cp, namespace, nil
 }
 
-func (cp *ClientProvider) Lock() {
-	cp.mu.Lock()
+func (p *Provider) Lock() {
+	p.mu.Lock()
 }
 
-func (cp *ClientProvider) Unlock() {
-	cp.mu.Unlock()
+func (p *Provider) Unlock() {
+	p.mu.Unlock()
 }
 
-func (cp *ClientProvider) getClientConfig() (clientcmd.OverridingClientConfig, error) {
-	kubeconfigData, err := os.ReadFile(cp.kubeconfigPath)
+func (p *Provider) getClientConfig() (clientcmd.OverridingClientConfig, error) {
+	kubeconfigData, err := os.ReadFile(p.kubeconfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read metal kubeconfig %s: %w", cp.kubeconfigPath, err)
+		return nil, fmt.Errorf("failed to read metal kubeconfig %s: %w", p.kubeconfigPath, err)
 	}
 	kubeconfig, err := clientcmd.Load(kubeconfigData)
 	if err != nil {
@@ -85,30 +85,30 @@ func getNamespace(clientConfig clientcmd.OverridingClientConfig) (string, error)
 	return namespace, nil
 }
 
-func (cp *ClientProvider) setMetalClient(clientConfig clientcmd.OverridingClientConfig) error {
+func (p *Provider) setMetalClient(clientConfig clientcmd.OverridingClientConfig) error {
 	restConfig, err := clientConfig.ClientConfig()
 	if err != nil {
 		return fmt.Errorf("unable to get metal cluster rest config: %w", err)
 	}
-	cp.mu.Lock()
-	defer cp.mu.Unlock()
-	newClient, err := client.New(restConfig, client.Options{Scheme: cp.s})
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	newClient, err := client.New(restConfig, client.Options{Scheme: p.s})
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	cp.Client = newClient
+	p.Client = newClient
 	return nil
 }
 
-func (cp *ClientProvider) reloadMetalClientOnConfigChange(ctx context.Context) error {
+func (p *Provider) reloadMetalClientOnConfigChange(ctx context.Context) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("unable to create kubeconfig watcher: %w", err)
 	}
 
-	if err = watcher.Add(path.Dir(cp.kubeconfigPath)); err != nil {
+	if err = watcher.Add(path.Dir(p.kubeconfigPath)); err != nil {
 		watcher.Close()
-		return fmt.Errorf("unable to add kubeconfig \"%s\" to watcher: %v", cp.kubeconfigPath, err)
+		return fmt.Errorf("unable to add kubeconfig \"%s\" to watcher: %v", p.kubeconfigPath, err)
 	}
 	go func() {
 		defer watcher.Close()
@@ -117,16 +117,16 @@ func (cp *ClientProvider) reloadMetalClientOnConfigChange(ctx context.Context) e
 			case err := <-watcher.Errors:
 				log.Fatalf("watcher returned an error: %v", err)
 			case event := <-watcher.Events:
-				if event.Name != cp.kubeconfigPath {
+				if event.Name != p.kubeconfigPath {
 					continue
 				}
 
-				clientConfig, err := cp.getClientConfig()
+				clientConfig, err := p.getClientConfig()
 				if err != nil {
 					log.Printf("couldn't get client config when config changed: %v", err)
 					continue
 				}
-				if err := cp.setMetalClient(clientConfig); err != nil {
+				if err := p.setMetalClient(clientConfig); err != nil {
 					log.Printf("couldn't update metal client when config changed: %v", err)
 				}
 			case <-ctx.Done():

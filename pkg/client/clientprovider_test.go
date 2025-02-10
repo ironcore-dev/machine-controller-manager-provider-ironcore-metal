@@ -40,16 +40,16 @@ func wrap(test func(string, context.Context)) func() {
 	}
 }
 
-var _ = Describe("ClientProvider", func() {
+var _ = Describe("Provider", func() {
 	When("kubeconfig file is absent", func() {
 		It("returns an error", wrap(func(dirName string, ctx context.Context) {
-			_, _, err := NewClientProviderAndNamespace(ctx, path.Join(dirName, "kubeconfig"))
+			_, _, err := NewProviderAndNamespace(ctx, path.Join(dirName, "kubeconfig"))
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(HavePrefix("failed to read metal kubeconfig"))
 		}))
 
 		It("returns an error", wrap(func(dirName string, ctx context.Context) {
-			_, _, err := NewClientProviderAndNamespace(ctx, path.Join(dirName, "extraDir", "kubeconfig"))
+			_, _, err := NewProviderAndNamespace(ctx, path.Join(dirName, "extraDir", "kubeconfig"))
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(HavePrefix("unable to add kubeconfig"))
 		}))
@@ -59,7 +59,7 @@ var _ = Describe("ClientProvider", func() {
 		It("returns an error", wrap(func(dirName string, ctx context.Context) {
 			kubeconfig := path.Join(dirName, "kubeconfig")
 			Expect(os.WriteFile(kubeconfig, []byte{}, 0644)).ShouldNot(HaveOccurred())
-			_, _, err := NewClientProviderAndNamespace(ctx, kubeconfig)
+			_, _, err := NewProviderAndNamespace(ctx, kubeconfig)
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(HavePrefix("unable to get metal cluster rest config"))
 		}))
@@ -69,7 +69,7 @@ var _ = Describe("ClientProvider", func() {
 		It("returns a default namespace and a client", wrap(func(dirName string, ctx context.Context) {
 			kubeconfig := path.Join(dirName, "kubeconfig")
 			Expect(os.WriteFile(kubeconfig, []byte(kubeconfigStr), 0644)).ShouldNot(HaveOccurred())
-			cp, ns, err := NewClientProviderAndNamespace(ctx, kubeconfig)
+			cp, ns, err := NewProviderAndNamespace(ctx, kubeconfig)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(ns).To(Equal("default"))
 			Expect(cp).NotTo(BeNil())
@@ -79,7 +79,7 @@ var _ = Describe("ClientProvider", func() {
 			It("updates the client", wrap(func(dirName string, ctx context.Context) {
 				kubeconfig := path.Join(dirName, "kubeconfig")
 				Expect(os.WriteFile(kubeconfig, []byte(kubeconfigStr), 0644)).ShouldNot(HaveOccurred())
-				cp, _, err := NewClientProviderAndNamespace(ctx, kubeconfig)
+				cp, _, err := NewProviderAndNamespace(ctx, kubeconfig)
 				Expect(err).ShouldNot(HaveOccurred())
 
 				cp.mu.Lock()

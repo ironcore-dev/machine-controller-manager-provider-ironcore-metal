@@ -31,7 +31,7 @@ var (
 
 type metalDriver struct {
 	Schema         *runtime.Scheme
-	clientProvider *mcmclient.ClientProvider
+	clientProvider *mcmclient.Provider
 	metalNamespace string
 	csiDriverName  string
 }
@@ -45,7 +45,7 @@ func (d *metalDriver) GetVolumeIDs(_ context.Context, req *driver.GetVolumeIDsRe
 }
 
 // NewDriver returns a new Gardener metal driver object
-func NewDriver(cp *mcmclient.ClientProvider, namespace, csiDriverName string) driver.Driver {
+func NewDriver(cp *mcmclient.Provider, namespace, csiDriverName string) driver.Driver {
 	return &metalDriver{
 		clientProvider: cp,
 		metalNamespace: namespace,

@@ -43,7 +43,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	clientProvider, namespace, err := mcmclient.NewClientProviderAndNamespace(ctrl.SetupSignalHandler(), KubeconfigPath)
+	clientProvider, namespace, err := mcmclient.NewProviderAndNamespace(ctrl.SetupSignalHandler(), KubeconfigPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
