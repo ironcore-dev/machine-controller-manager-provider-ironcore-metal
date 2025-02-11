@@ -36,7 +36,7 @@ func NewProviderAndNamespace(ctx context.Context, kubeconfigPath string) (*Provi
 	utilruntime.Must(corev1.AddToScheme(cp.s))
 	utilruntime.Must(metalv1alpha1.AddToScheme(cp.s))
 	utilruntime.Must(ipamv1alpha1.AddToScheme(cp.s))
-	utilruntime.Must(capiv1beta1.AddToScheme(s))
+	utilruntime.Must(capiv1beta1.AddToScheme(cp.s))
 
 	if err := cp.reloadMetalClientOnConfigChange(ctx); err != nil {
 		return nil, "", err
