@@ -24,6 +24,7 @@ import (
 	"k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/logs"
 	logsv1 "k8s.io/component-base/logs/api/v1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -73,6 +74,7 @@ func getMetalClientAndNamespace() (client.Client, string, error) {
 	utilruntime.Must(corev1.AddToScheme(s))
 	utilruntime.Must(metalv1alpha1.AddToScheme(s))
 	utilruntime.Must(ipamv1alpha1.AddToScheme(s))
+	utilruntime.Must(capiv1beta1.AddToScheme(s))
 
 	kubeconfigData, err := os.ReadFile(KubeconfigPath)
 	if err != nil {

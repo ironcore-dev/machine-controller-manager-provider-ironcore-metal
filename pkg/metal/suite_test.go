@@ -24,6 +24,7 @@ import (
 	kuberuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -66,6 +67,7 @@ var _ = BeforeSuite(func() {
 			modutils.Dir("github.com/gardener/machine-controller-manager", "kubernetes", "crds", "machine.sapcloud.io_machinesets.yaml"),
 			modutils.Dir("github.com/ironcore-dev/metal-operator", "config", "crd", "bases"),
 			modutils.Dir("github.com/ironcore-dev/ipam", "config", "crd", "bases"),
+			modutils.Dir("sigs.k8s.io/cluster-api", "config", "crd", "bases"),
 		},
 		ErrorIfCRDPathMissing: true,
 
@@ -89,6 +91,7 @@ var _ = BeforeSuite(func() {
 	//+kubebuilder:scaffold:scheme
 	Expect(metalv1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(ipamv1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(capiv1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())

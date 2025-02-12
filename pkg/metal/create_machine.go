@@ -14,6 +14,7 @@ import (
 	ipamv1alpha1 "github.com/ironcore-dev/ipam/api/ipam/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
+	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 
 	machinev1alpha1 "github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
@@ -79,30 +80,39 @@ func (d *metalDriver) applyIPAddresses(ctx context.Context, req *driver.CreateMa
 	var allAddressMetaData []map[string]any
 
 	for _, networkRef := range providerSpec.IPAMConfig {
+		ipAddrKey := apitypes.NamespacedName{
+			Name:      req.Machine.Name,
+			Namespace: d.metalNamespace,
+		}
+
+		if networkRef.IPAMRef != nil && networkRef.IPAMRef.APIGroup == capiv1beta1.GroupVersion.Group {
+			addressMetaData, err := d.applyCapiIPAddress(ctx, networkRef, ipAddrKey)
+			if err != nil {
+				return nil, err
+			}
+			allAddressMetaData = append(allAddressMetaData, addressMetaData)
+			continue
+		}
+
 		// check if IPAddress exists
 		ipAddr := &ipamv1alpha1.IP{}
-		ipAddrName := req.Machine.Name
-		ipAddrKey := apitypes.NamespacedName{
-			Namespace: d.metalNamespace,
-			Name:      ipAddrName,
-		}
 		var err error
 		if err = d.metalClient.Get(ctx, ipAddrKey, ipAddr); err != nil && !apierrors.IsNotFound(err) {
 			return nil, err
 		}
 		if err == nil {
-			klog.V(3).Infof("IP found %s", ipAddrName)
+			klog.V(3).Infof("IP found %s", ipAddrKey.String())
 		}
 		if apierrors.IsNotFound(err) {
 			if networkRef.IPAMRef == nil {
 				return nil, errors.New("ipamRef of an ipamConfig is not set")
 			}
-			klog.V(3).Infof("creating IP to claim address %s", ipAddrName)
+			klog.V(3).Infof("creating IP to claim address %s", ipAddrKey.String())
 			subnetRef := corev1.LocalObjectReference{Name: networkRef.IPAMRef.Name}
 			ip := &ipamv1alpha1.IP{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      ipAddrName,
-					Namespace: d.metalNamespace,
+					Name:      ipAddrKey.Name,
+					Namespace: ipAddrKey.Namespace,
 				},
 				Spec: ipamv1alpha1.IPSpec{Subnet: subnetRef},
 			}
@@ -138,6 +148,72 @@ func (d *metalDriver) applyIPAddresses(ctx context.Context, req *driver.CreateMa
 		allAddressMetaData = append(allAddressMetaData, addressMetaData)
 	}
 	return allAddressMetaData, nil
+}
+
+func (d *metalDriver) applyCapiIPAddress(ctx context.Context, networkRef apiv1alpha1.IPAMConfig, ipAddrKey apitypes.NamespacedName) (map[string]any, error) {
+	ipClaim := &capiv1beta1.IPAddressClaim{}
+	if err := d.metalClient.Get(ctx, ipAddrKey, ipClaim); err != nil && !apierrors.IsNotFound(err) {
+		return nil, err
+	} else if err == nil {
+		klog.V(3).Infof("IP found %s", ipAddrKey.String())
+		if !isIPAddressClaimReady(ipClaim) {
+			return nil, errors.New("IP address claim isn't ready")
+		}
+	} else if apierrors.IsNotFound(err) {
+		klog.V(3).Infof("creating IP to claim address %s", ipAddrKey.String())
+		apiGroup := capiv1beta1.GroupVersion.Group
+		ipClaim = &capiv1beta1.IPAddressClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ipAddrKey.Name,
+				Namespace: ipAddrKey.Namespace,
+			},
+			Spec: capiv1beta1.IPAddressClaimSpec{
+				PoolRef: corev1.TypedLocalObjectReference{
+					APIGroup: &apiGroup,
+					Kind:     "IPAddressClaim",
+					Name:     networkRef.IPAMRef.Name,
+				},
+			},
+		}
+		if err = d.metalClient.Create(ctx, ipClaim); err != nil {
+			return nil, fmt.Errorf("error creating IP: %w", err)
+		}
+
+		// Wait for the IP address claim to reach the ready state
+		err = wait.PollUntilContextTimeout(
+			ctx,
+			time.Millisecond*50,
+			time.Millisecond*340,
+			true,
+			func(ctx context.Context) (bool, error) {
+				if err = d.metalClient.Get(ctx, ipAddrKey, ipClaim); err != nil && !apierrors.IsNotFound(err) {
+					return false, err
+				}
+				return isIPAddressClaimReady(ipClaim), nil
+			})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	ipAddr := &capiv1beta1.IPAddress{}
+	if err := d.metalClient.Get(ctx, ipAddrKey, ipAddr); err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		networkRef.MetadataKey: map[string]any{
+			"ip": ipAddr.Spec.Address,
+		},
+	}, nil
+}
+
+func isIPAddressClaimReady(ipClaim *capiv1beta1.IPAddressClaim) bool {
+	for _, cnd := range ipClaim.GetConditions() {
+		if cnd.Type == "Ready" && cnd.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }
 
 // applyIgnition creates an ignition file for the machine and stores it in a secret
