@@ -195,6 +195,9 @@ func (d *metalDriver) applyCapiIPAddress(ctx context.Context, networkRef apiv1al
 				}
 				return isIPAddressClaimReady(ipClaim), nil
 			})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ipAddr := &capiv1beta1.IPAddress{}
