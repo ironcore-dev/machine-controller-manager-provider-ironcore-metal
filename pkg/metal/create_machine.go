@@ -174,7 +174,7 @@ func (d *metalDriver) applyCapiIPAddress(ctx context.Context, networkRef apiv1al
 			Spec: capiv1beta1.IPAddressClaimSpec{
 				PoolRef: corev1.TypedLocalObjectReference{
 					APIGroup: &apiGroup,
-					Kind:     "IPAddressClaim",
+					Kind:     "GlobalInClusterIPPool",
 					Name:     networkRef.IPAMRef.Name,
 				},
 			},
