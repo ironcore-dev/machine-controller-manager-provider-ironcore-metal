@@ -212,12 +212,7 @@ func (d *metalDriver) applyCapiIPAddress(ctx context.Context, networkRef apiv1al
 }
 
 func isIPAddressClaimReady(ipClaim *capiv1beta1.IPAddressClaim) bool {
-	for _, cnd := range ipClaim.GetConditions() {
-		if cnd.Type == "Ready" && cnd.Status == corev1.ConditionTrue {
-			return true
-		}
-	}
-	return false
+	return ipClaim.Status.AddressRef.Name != ""
 }
 
 // applyIgnition creates an ignition file for the machine and stores it in a secret
