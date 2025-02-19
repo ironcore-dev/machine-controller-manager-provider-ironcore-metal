@@ -6,7 +6,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path"
 	"sync"
@@ -19,6 +18,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/scale/scheme"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog"
 	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -53,6 +53,7 @@ func NewProviderAndNamespace(ctx context.Context, kubeconfigPath string) (*Provi
 		return nil, "", err
 	}
 
+	klog.V(3).Infof("A new client provider was created for %s", kubeconfigPath)
 	return cp, namespace, nil
 }
 
@@ -113,24 +114,31 @@ func (p *Provider) reloadMetalClientOnConfigChange(ctx context.Context) error {
 		return fmt.Errorf("unable to add kubeconfig \"%s\" to watcher: %v", p.kubeconfigPath, err)
 	}
 	go func() {
-		defer watcher.Close()
+		defer func() {
+			watcher.Close()
+			klog.V(3).Infof("watcher loop ended for %s", path.Dir(p.kubeconfigPath))
+		}()
+		klog.V(3).Infof("watcher loop started for %s", path.Dir(p.kubeconfigPath))
 		for {
 			select {
 			case err := <-watcher.Errors:
-				log.Fatalf("watcher returned an error: %v", err)
+				klog.Fatalf("watcher returned an error: %v", err)
 			case event := <-watcher.Events:
+				klog.V(4).Infof("event: %s", event.String())
 				if event.Name != p.kubeconfigPath {
 					continue
 				}
 
 				clientConfig, err := p.getClientConfig()
 				if err != nil {
-					log.Printf("couldn't get client config when config changed: %v", err)
+					klog.Warningf("couldn't get client config when config changed: %v", err)
 					continue
 				}
 				if err := p.setMetalClient(clientConfig); err != nil {
-					log.Printf("couldn't update metal client when config changed: %v", err)
+					klog.Warningf("couldn't update metal client when config changed: %v", err)
+					continue
 				}
+				klog.V(3).Infof("change of kubeconfig was handled successfully")
 			case <-ctx.Done():
 				return
 			}
