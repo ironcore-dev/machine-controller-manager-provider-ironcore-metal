@@ -124,7 +124,7 @@ func (p *Provider) reloadMetalClientOnConfigChange(ctx context.Context) error {
 			case err := <-watcher.Errors:
 				klog.Fatalf("watcher returned an error: %v", err)
 			case event := <-watcher.Events:
-				klog.V(4).Infof("event: %s", event.String())
+				klog.V(3).Infof("event: %s", event.String())
 				if event.Name != p.kubeconfigPath {
 					continue
 				}
