@@ -11,6 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 )
 
 const kubeconfigStr = `apiVersion: v1
@@ -77,9 +78,12 @@ var _ = Describe("Provider", func() {
 
 		When("kubeconfig file has changed", func() {
 			It("updates the client", wrap(func(dirName string, ctx context.Context) {
-				kubeconfig := path.Join(dirName, "kubeconfig")
-				Expect(os.WriteFile(kubeconfig, []byte(kubeconfigStr), 0644)).ShouldNot(HaveOccurred())
-				cp, _, err := NewProviderAndNamespace(ctx, kubeconfig)
+				aw, err := volumeutil.NewAtomicWriter(dirName, "test")
+				Expect(err).ShouldNot(HaveOccurred())
+				err = aw.Write(map[string]volumeutil.FileProjection{"kubeconfig": {Data: []byte(kubeconfigStr), Mode: 0644}}, nil)
+				Expect(err).ShouldNot(HaveOccurred())
+
+				cp, _, err := NewProviderAndNamespace(ctx, path.Join(dirName, "kubeconfig"))
 				Expect(err).ShouldNot(HaveOccurred())
 
 				cp.mu.Lock()
@@ -87,7 +91,8 @@ var _ = Describe("Provider", func() {
 				cp.mu.Unlock()
 
 				newKubeconfigStr := strings.Replace(kubeconfigStr, "123", "321", 1)
-				Expect(os.WriteFile(kubeconfig, []byte(newKubeconfigStr), 0644)).ShouldNot(HaveOccurred())
+				err = aw.Write(map[string]volumeutil.FileProjection{"kubeconfig": {Data: []byte(newKubeconfigStr), Mode: 0644}}, nil)
+				Expect(err).ShouldNot(HaveOccurred())
 
 				Eventually(func(g Gomega) {
 					cp.mu.Lock()
