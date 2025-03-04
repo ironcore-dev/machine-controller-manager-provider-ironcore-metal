@@ -7,11 +7,12 @@ import (
 	"context"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 )
 
 const kubeconfigStr = `apiVersion: v1
@@ -78,10 +79,7 @@ var _ = Describe("Provider", func() {
 
 		When("kubeconfig file has changed", func() {
 			It("updates the client", wrap(func(dirName string, ctx context.Context) {
-				aw, err := volumeutil.NewAtomicWriter(dirName, "test")
-				Expect(err).ShouldNot(HaveOccurred())
-				err = aw.Write(map[string]volumeutil.FileProjection{"kubeconfig": {Data: []byte(kubeconfigStr), Mode: 0644}}, nil)
-				Expect(err).ShouldNot(HaveOccurred())
+				atomicWrite(dirName, "kubeconfig", []byte(kubeconfigStr))
 
 				cp, _, err := NewProviderAndNamespace(ctx, path.Join(dirName, "kubeconfig"))
 				Expect(err).ShouldNot(HaveOccurred())
@@ -91,8 +89,7 @@ var _ = Describe("Provider", func() {
 				cp.mu.Unlock()
 
 				newKubeconfigStr := strings.Replace(kubeconfigStr, "123", "321", 1)
-				err = aw.Write(map[string]volumeutil.FileProjection{"kubeconfig": {Data: []byte(newKubeconfigStr), Mode: 0644}}, nil)
-				Expect(err).ShouldNot(HaveOccurred())
+				atomicWrite(dirName, "kubeconfig", []byte(newKubeconfigStr))
 
 				Eventually(func(g Gomega) {
 					cp.mu.Lock()
@@ -104,3 +101,29 @@ var _ = Describe("Provider", func() {
 		})
 	})
 })
+
+// atomicWrite is a function that mimic behaviour of k8s.io/kubernetes/pkg/volume/util AtomicWriter which is the way k8s controllers save mounted files from secrets.
+func atomicWrite(targetDir string, fileName string, content []byte) {
+	dataDirPath := filepath.Join(targetDir, "..data")
+	oldTsDir, _ := os.Readlink(dataDirPath)
+	oldTsPath := filepath.Join(targetDir, oldTsDir)
+
+	tsDir, err := os.MkdirTemp(targetDir, time.Now().UTC().Format("..2006_01_02_15_04_05."))
+	Expect(err).ShouldNot(HaveOccurred())
+	fullPath := filepath.Join(tsDir, fileName)
+	Expect(os.WriteFile(fullPath, content, os.ModePerm)).Should(Succeed())
+
+	newDataDirPath := filepath.Join(targetDir, "..data_tmp")
+	Expect(os.Symlink(filepath.Base(tsDir), newDataDirPath)).Should(Succeed())
+	Expect(os.Rename(newDataDirPath, dataDirPath)).Should(Succeed())
+
+	visibleFile := filepath.Join(targetDir, fileName)
+	_, err = os.Readlink(visibleFile)
+	if err != nil && os.IsNotExist(err) {
+		Expect(os.Symlink(filepath.Join("..data", fileName), visibleFile)).Should(Succeed())
+	}
+
+	if len(oldTsDir) > 0 {
+		Expect(os.RemoveAll(oldTsPath)).Should(Succeed())
+	}
+}
