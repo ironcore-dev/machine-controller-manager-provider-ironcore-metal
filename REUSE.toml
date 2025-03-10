@@ -4,7 +4,22 @@ SPDX-PackageSupplier = "IronCore authors <ospo@sap.com>"
 SPDX-PackageDownloadLocation = "https://github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal"
 
 [[annotations]]
-path = [".github/**", ".gitignore", ".golangci.yaml", "CODEOWNERS", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "Dockerfile", "Makefile", "kubernetes/**", "go.mod", "go.sum", "hack/**", "pkg/ignition/ignition.tmpl"]
+path = [
+    ".github/**",
+    ".gitignore",
+    ".golangci.yaml",
+    "CODEOWNERS",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "Dockerfile",
+    "Makefile",
+    "kubernetes/**",
+    "go.mod",
+    "go.sum",
+    "hack/**",
+    "pkg/ignition/ignition.tmpl",
+    "REUSE.toml"
+]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2024 SAP SE or an SAP affiliate company and IronCore contributors"
 SPDX-License-Identifier = "Apache-2.0"
