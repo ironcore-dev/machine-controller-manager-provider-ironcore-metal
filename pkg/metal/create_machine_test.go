@@ -4,8 +4,10 @@
 package metal
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
@@ -15,6 +17,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
@@ -108,5 +111,69 @@ var _ = Describe("CreateMachine", func() {
 			})
 			g.Expect(err.Error()).To(ContainSubstring("not supported by the driver"))
 		}).Should(Succeed())
+	})
+
+	When("capi ipam references are present in ipamConfig", func() {
+		It("should create ip claims and an ignition with ips", func(ctx SpecContext) {
+			machineName := "machine-0"
+			sampleProviderSpec := maps.Clone(testing.SampleProviderSpec)
+			delete(sampleProviderSpec, "metaData")
+
+			objToDelete := []client.Object{}
+			for _, pool := range []string{"pool-a", "pool-b"} {
+				ip, ipClaim := newIPRef(machineName, ns.Name, pool, sampleProviderSpec)
+				Expect(k8sClient.Create(ctx, ip)).To(Succeed())
+				go func() {
+					defer GinkgoRecover()
+					Eventually(UpdateStatus(ipClaim, func() {
+						ipClaim.Status.AddressRef.Name = ip.Name
+					})).Should(Succeed())
+				}()
+				objToDelete = append(objToDelete, ip, ipClaim)
+			}
+
+			By("creating machine")
+			_, err := (*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
+				Machine:      newMachine(ns, "machine", -1, nil),
+				MachineClass: newMachineClass(v1alpha1.ProviderName, sampleProviderSpec),
+				Secret:       providerSecret,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("ensuring that the ignition secret has been created")
+			ignition := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: ns.Name,
+					Name:      machineName,
+				},
+			}
+
+			expected := base64.StdEncoding.EncodeToString([]byte(`{"pool-a":{"gateway":"10.11.12.1","ip":"10.11.12.13","prefix":24},"pool-b":{"gateway":"10.11.12.1","ip":"10.11.12.13","prefix":24}}`))
+			Eventually(Object(ignition)).Should(SatisfyAll(
+				WithTransform(func(sec *corev1.Secret) []interface{} {
+					Expect(sec.Data).To(HaveKey("ignition"))
+					var ignition map[string]interface{}
+					Expect(json.Unmarshal(sec.Data["ignition"], &ignition)).To(Succeed())
+					Expect(ignition).To(HaveKey("storage"))
+					storage := ignition["storage"].(map[string]interface{})
+					Expect(storage).To(HaveKey("files"))
+					files := storage["files"].([]interface{})
+					return files
+				}, ContainElement(
+					map[string]interface{}{
+						"path": "/var/lib/metal-cloud-config/metadata",
+						"contents": map[string]interface{}{
+							"compression": "",
+							"source":      "data:;base64," + expected,
+						},
+						"mode": 420.0,
+					},
+				)),
+			))
+
+			for _, obj := range objToDelete {
+				Expect(k8sClient.Delete(ctx, obj)).To(Succeed())
+			}
+		})
 	})
 })

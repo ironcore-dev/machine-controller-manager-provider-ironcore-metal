@@ -35,7 +35,7 @@ import (
 
 const (
 	eventuallyTimeout    = 20 * time.Second
-	pollingInterval      = 250 * time.Millisecond
+	pollingInterval      = 100 * time.Millisecond
 	consistentlyDuration = 1 * time.Second
 )
 
@@ -198,4 +198,41 @@ func newMachineClass(providerName string, providerSpec map[string]interface{}) *
 			Zone:         "az1",
 		},
 	}
+}
+
+func newIPRef(machineName, ns, metadataKey string, providerSpec map[string]interface{}) (*capiv1beta1.IPAddress, *capiv1beta1.IPAddressClaim) {
+	ipAddress := &capiv1beta1.IPAddress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-address", metadataKey),
+			Namespace: ns,
+		},
+		Spec: capiv1beta1.IPAddressSpec{
+			Address: "10.11.12.13",
+			Prefix:  24,
+			Gateway: "10.11.12.1",
+		},
+	}
+	ipAddressClaimName := fmt.Sprintf("%s-%s", machineName, metadataKey)
+	ipAddressClaim := &capiv1beta1.IPAddressClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ipAddressClaimName,
+			Namespace: ns,
+		},
+	}
+	if providerSpec != nil {
+		ipamConfig := map[string]interface{}{
+			"metadataKey": metadataKey,
+			"ipamRef": map[string]interface{}{
+				"name":     ipAddressClaimName,
+				"apiGroup": "ipam.cluster.x-k8s.io",
+				"kind":     "GlobalInClusterIPPool",
+			}}
+		if providerSpec["ipamConfig"] != nil {
+			providerSpec["ipamConfig"] = append(providerSpec["ipamConfig"].([]map[string]interface{}), ipamConfig)
+		} else {
+			providerSpec["ipamConfig"] = []map[string]interface{}{ipamConfig}
+		}
+	}
+
+	return ipAddress, ipAddressClaim
 }

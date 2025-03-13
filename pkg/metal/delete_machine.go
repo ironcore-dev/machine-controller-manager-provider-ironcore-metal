@@ -6,6 +6,7 @@ package metal
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	ipamv1alpha1 "github.com/ironcore-dev/ipam/api/ipam/v1alpha1"
@@ -53,24 +54,34 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 		return nil, status.Error(codes.Unknown, fmt.Sprintf("error deleting ignition secret: %s", err.Error()))
 	}
 
-	ipMeta := metav1.ObjectMeta{
+	// ironcore-metal ipam specific cleanup
+	ip := &ipamv1alpha1.IP{ObjectMeta: metav1.ObjectMeta{
 		Name:      req.Machine.Name,
 		Namespace: d.metalNamespace,
-	}
-	ips := []client.Object{
-		&ipamv1alpha1.IP{ObjectMeta: ipMeta},
-		&capiv1beta1.IPAddressClaim{ObjectMeta: ipMeta},
+	}}
+	if err := metalClient.Delete(ctx, ip); meta.IsNoMatchError(err) {
+		klog.Warningf("Kind %s for IP with name %s not found, assuming IP object for that kind is abscent", ip.GetObjectKind().GroupVersionKind().Kind, ip.Name)
+	} else if client.IgnoreNotFound(err) != nil {
+		// Unknown leads to short retry in machine controller
+		return nil, status.Error(codes.Unknown, fmt.Sprintf("error deleting ip resource: %s", err.Error()))
 	}
 
-	for _, ip := range ips {
-		err := metalClient.Delete(ctx, ip)
-		if meta.IsNoMatchError(err) {
-			klog.Warningf("Kind %s for IP with name %s not found, assuming IP object for that kind is abscent", ip.GetObjectKind().GroupVersionKind().Kind, ipMeta.Name)
-			continue
-		}
-		if client.IgnoreNotFound(err) != nil {
-			// Unknown leads to short retry in machine controller
-			return nil, status.Error(codes.Unknown, fmt.Sprintf("error deleting ip resource: %s", err.Error()))
+	// capi ipam specific cleanup
+	ipList := &capiv1beta1.IPAddressClaimList{}
+	if err := metalClient.List(ctx, ipList, client.InNamespace(d.metalNamespace)); meta.IsNoMatchError(err) {
+		klog.Warningf("Kind %s for machine name %s not found, assuming IP objects for that kind are absent", ipList.GetObjectKind().GroupVersionKind().Kind, req.Machine.Name)
+		ipList = &capiv1beta1.IPAddressClaimList{}
+	} else if err != nil {
+		return nil, status.Error(codes.Unknown, fmt.Sprintf("error getting ip resources: %s", err.Error()))
+	}
+	for _, ip := range ipList.Items {
+		if strings.HasPrefix(ip.Name, req.Machine.Name) {
+			if err := metalClient.Delete(ctx, &ip); meta.IsNoMatchError(err) {
+				klog.Warningf("Kind %s for IP with name %s not found, assuming IP object for that kind is abscent", ip.GetObjectKind().GroupVersionKind().Kind, ip.Name)
+			} else if client.IgnoreNotFound(err) != nil {
+				// Unknown leads to short retry in machine controller
+				return nil, status.Error(codes.Unknown, fmt.Sprintf("error deleting ip resource: %s", err.Error()))
+			}
 		}
 	}
 

@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
+	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -90,7 +91,7 @@ func (d *metalDriver) applyIPAddresses(ctx context.Context, req *driver.CreateMa
 		}
 
 		if networkRef.IPAMRef != nil && networkRef.IPAMRef.APIGroup == capiv1beta1.GroupVersion.Group {
-			addressMetaData, err := d.applyCapiIPAddress(ctx, networkRef, ipAddrKey, metalClient)
+			addressMetaData, err := d.applyCapiIPAddress(ctx, networkRef, req.Machine.Name, metalClient)
 			if err != nil {
 				return nil, err
 			}
@@ -154,27 +155,37 @@ func (d *metalDriver) applyIPAddresses(ctx context.Context, req *driver.CreateMa
 	return allAddressMetaData, nil
 }
 
-func (d *metalDriver) applyCapiIPAddress(ctx context.Context, networkRef apiv1alpha1.IPAMConfig, ipAddrKey apitypes.NamespacedName, metalClient client.Client) (map[string]any, error) {
+func (d *metalDriver) applyCapiIPAddress(ctx context.Context, networkRef apiv1alpha1.IPAMConfig, machineName string, metalClient client.Client) (map[string]any, error) {
+	ipAddrClaimName := fmt.Sprintf("%s-%s", machineName, networkRef.MetadataKey)
+	if len(ipAddrClaimName) > utilvalidation.DNS1123SubdomainMaxLength {
+		klog.Info("IP address claim name is too long, it will be shortened which can cause name collisions", "name", ipAddrClaimName)
+		ipAddrClaimName = ipAddrClaimName[:utilvalidation.DNS1123SubdomainMaxLength]
+	}
+
+	ipAddrClaimKey := client.ObjectKey{Namespace: d.metalNamespace, Name: ipAddrClaimName}
 	ipClaim := &capiv1beta1.IPAddressClaim{}
-	if err := metalClient.Get(ctx, ipAddrKey, ipClaim); err != nil && !apierrors.IsNotFound(err) {
+	if err := metalClient.Get(ctx, ipAddrClaimKey, ipClaim); err != nil && !apierrors.IsNotFound(err) {
 		return nil, err
 	} else if err == nil {
-		klog.V(3).Infof("IP found %s", ipAddrKey.String())
-		if !isIPAddressClaimReady(ipClaim) {
+		klog.V(3).Infof("IP address claim found %s", ipAddrClaimKey.String())
+		if ipClaim.Status.AddressRef.Name == "" {
 			return nil, errors.New("IP address claim isn't ready")
 		}
 	} else if apierrors.IsNotFound(err) {
-		klog.V(3).Infof("creating IP to claim address %s", ipAddrKey.String())
-		apiGroup := capiv1beta1.GroupVersion.Group
+		if networkRef.IPAMRef == nil {
+			return nil, errors.New("ipamRef of an ipamConfig is not set")
+		}
+		klog.V(3).Info("creating IP address claim", "name", ipAddrClaimKey.String())
+		apiGroup := networkRef.IPAMRef.APIGroup
 		ipClaim = &capiv1beta1.IPAddressClaim{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      ipAddrKey.Name,
-				Namespace: ipAddrKey.Namespace,
+				Name:      ipAddrClaimKey.Name,
+				Namespace: ipAddrClaimKey.Namespace,
 			},
 			Spec: capiv1beta1.IPAddressClaimSpec{
 				PoolRef: corev1.TypedLocalObjectReference{
 					APIGroup: &apiGroup,
-					Kind:     "GlobalInClusterIPPool",
+					Kind:     networkRef.IPAMRef.Kind,
 					Name:     networkRef.IPAMRef.Name,
 				},
 			},
@@ -190,16 +201,17 @@ func (d *metalDriver) applyCapiIPAddress(ctx context.Context, networkRef apiv1al
 			time.Millisecond*340,
 			true,
 			func(ctx context.Context) (bool, error) {
-				if err = metalClient.Get(ctx, ipAddrKey, ipClaim); err != nil && !apierrors.IsNotFound(err) {
+				if err = metalClient.Get(ctx, ipAddrClaimKey, ipClaim); err != nil && !apierrors.IsNotFound(err) {
 					return false, err
 				}
-				return isIPAddressClaimReady(ipClaim), nil
+				return ipClaim.Status.AddressRef.Name != "", nil
 			})
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	ipAddrKey := client.ObjectKey{Namespace: ipClaim.Namespace, Name: ipClaim.Status.AddressRef.Name}
 	ipAddr := &capiv1beta1.IPAddress{}
 	if err := metalClient.Get(ctx, ipAddrKey, ipAddr); err != nil {
 		return nil, err
@@ -211,10 +223,6 @@ func (d *metalDriver) applyCapiIPAddress(ctx context.Context, networkRef apiv1al
 			"gateway": ipAddr.Spec.Gateway,
 		},
 	}, nil
-}
-
-func isIPAddressClaimReady(ipClaim *capiv1beta1.IPAddressClaim) bool {
-	return ipClaim.Status.AddressRef.Name != ""
 }
 
 // applyIgnition creates an ignition file for the machine and stores it in a secret
