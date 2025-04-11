@@ -17,6 +17,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
@@ -119,7 +120,8 @@ var _ = Describe("CreateMachine", func() {
 			sampleProviderSpec := maps.Clone(testing.SampleProviderSpec)
 			delete(sampleProviderSpec, "metaData")
 
-			objToDelete := []client.Object{}
+			ipClaims := []*capiv1beta1.IPAddressClaim{}
+			ips := []*capiv1beta1.IPAddress{}
 			for _, pool := range []string{"pool-a", "pool-b"} {
 				ip, ipClaim := newIPRef(machineName, ns.Name, pool, sampleProviderSpec)
 				Expect(k8sClient.Create(ctx, ip)).To(Succeed())
@@ -129,7 +131,8 @@ var _ = Describe("CreateMachine", func() {
 						ipClaim.Status.AddressRef.Name = ip.Name
 					})).Should(Succeed())
 				}()
-				objToDelete = append(objToDelete, ip, ipClaim)
+				ipClaims = append(ipClaims, ipClaim)
+				ips = append(ips, ip)
 			}
 
 			By("creating machine")
@@ -139,6 +142,24 @@ var _ = Describe("CreateMachine", func() {
 				Secret:       providerSecret,
 			})
 			Expect(err).NotTo(HaveOccurred())
+
+			By("ensuring that the server claim owns the ip address claims")
+			ServerClaimKey := client.ObjectKey{Namespace: ns.Name, Name: machineName}
+			ServerClaim := &metalv1alpha1.ServerClaim{}
+			Eventually(k8sClient.Get(ctx, ServerClaimKey, ServerClaim)).Should(Succeed())
+
+			for _, ipClaim := range ipClaims {
+				Eventually(Object(ipClaim)).Should(SatisfyAll(
+					HaveField("Labels", HaveKeyWithValue(LabelKeyServerClaim, ServerClaim.Namespace+"_"+ServerClaim.Name)),
+					HaveField("OwnerReferences", ContainElement(
+						metav1.OwnerReference{
+							APIVersion: metalv1alpha1.GroupVersion.String(),
+							Kind:       "ServerClaim",
+							Name:       ServerClaim.Name,
+							UID:        ServerClaim.UID,
+						},
+					))))
+			}
 
 			By("ensuring that the ignition secret has been created")
 			ignition := &corev1.Secret{
@@ -171,8 +192,11 @@ var _ = Describe("CreateMachine", func() {
 				)),
 			))
 
-			for _, obj := range objToDelete {
-				Expect(k8sClient.Delete(ctx, obj)).To(Succeed())
+			for _, ipClaim := range ipClaims {
+				Expect(k8sClient.Delete(ctx, ipClaim)).To(Succeed())
+			}
+			for _, ip := range ips {
+				Expect(k8sClient.Delete(ctx, ip)).To(Succeed())
 			}
 		})
 	})

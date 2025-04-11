@@ -6,7 +6,6 @@ package metal
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
@@ -16,11 +15,9 @@ import (
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -50,25 +47,6 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 	if err := metalClient.Delete(ctx, ignitionSecret); client.IgnoreNotFound(err) != nil {
 		// Unknown leads to short retry in machine controller
 		return nil, status.Error(codes.Unknown, fmt.Sprintf("error deleting ignition secret: %s", err.Error()))
-	}
-
-	// capi ipam specific cleanup
-	ipList := &capiv1beta1.IPAddressClaimList{}
-	if err := metalClient.List(ctx, ipList, client.InNamespace(d.metalNamespace)); meta.IsNoMatchError(err) {
-		klog.Warningf("Kind %s for machine name %s not found, assuming IP objects for that kind are absent", ipList.GetObjectKind().GroupVersionKind().Kind, req.Machine.Name)
-		ipList = &capiv1beta1.IPAddressClaimList{}
-	} else if err != nil {
-		return nil, status.Error(codes.Unknown, fmt.Sprintf("error getting ip resources: %s", err.Error()))
-	}
-	for _, ip := range ipList.Items {
-		if strings.HasPrefix(ip.Name, req.Machine.Name) {
-			if err := metalClient.Delete(ctx, &ip); meta.IsNoMatchError(err) {
-				klog.Warningf("Kind %s for IP with name %s not found, assuming IP object for that kind is abscent", ip.GetObjectKind().GroupVersionKind().Kind, ip.Name)
-			} else if client.IgnoreNotFound(err) != nil {
-				// Unknown leads to short retry in machine controller
-				return nil, status.Error(codes.Unknown, fmt.Sprintf("error deleting ip resource: %s", err.Error()))
-			}
-		}
 	}
 
 	serverClaim := &metalv1alpha1.ServerClaim{

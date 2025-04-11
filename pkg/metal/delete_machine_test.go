@@ -23,11 +23,6 @@ var _ = Describe("DeleteMachine", func() {
 
 	It("should create and delete a machine", func(ctx SpecContext) {
 		By("creating an metal machine")
-		_, ipClaim1 := newIPRef("machine-0", ns.Name, "to-delete-pool-a", nil)
-		_, ipClaim2 := newIPRef("machine-0", ns.Name, "to-delete-pool-b", nil)
-		Expect(k8sClient.Create(ctx, ipClaim1)).To(Succeed())
-		Expect(k8sClient.Create(ctx, ipClaim2)).To(Succeed())
-
 		Expect((*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
 			Machine:      newMachine(ns, "machine", -1, nil),
 			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
@@ -65,9 +60,6 @@ var _ = Describe("DeleteMachine", func() {
 
 		By("waiting for the ignition secret to be gone")
 		Eventually(Get(ignition)).Should(Satisfy(apierrors.IsNotFound))
-
-		Eventually(Get(ipClaim1)).Should(Satisfy(apierrors.IsNotFound))
-		Eventually(Get(ipClaim2)).Should(Satisfy(apierrors.IsNotFound))
 	})
 
 	It("should create and delete a machine igntition secret created with old naming convention", func(ctx SpecContext) {
