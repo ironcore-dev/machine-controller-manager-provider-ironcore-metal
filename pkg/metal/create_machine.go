@@ -32,6 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+const LabelKeyServerClaim = "metal.ironcore.dev/server-claim"
+
 // CreateMachine handles a machine creation request
 func (d *metalDriver) CreateMachine(ctx context.Context, req *driver.CreateMachineRequest) (*driver.CreateMachineResponse, error) {
 	if isEmptyCreateRequest(req) {
@@ -84,6 +86,7 @@ func isEmptyCreateRequest(req *driver.CreateMachineRequest) bool {
 func (d *metalDriver) getOrCreateIPAddressClaims(ctx context.Context, req *driver.CreateMachineRequest, providerSpec *apiv1alpha1.ProviderSpec) ([]*capiv1beta1.IPAddressClaim, map[string]any, error) {
 	ipAddressClaims := []*capiv1beta1.IPAddressClaim{}
 	addressesMetaData := make(map[string]any)
+	labelValue := req.Machine.Namespace + "_" + req.Machine.Name
 
 	d.clientProvider.Lock()
 	defer d.clientProvider.Unlock()
@@ -105,6 +108,9 @@ func (d *metalDriver) getOrCreateIPAddressClaims(ctx context.Context, req *drive
 			if ipClaim.Status.AddressRef.Name == "" {
 				return nil, nil, fmt.Errorf("IP address claim %q has no IP address reference", ipAddrClaimKey.String())
 			}
+			if ipClaim.Labels == nil || ipClaim.Labels[LabelKeyServerClaim] != labelValue {
+				return nil, nil, fmt.Errorf("IP address claim %q has no server claim label", ipAddrClaimKey.String())
+			}
 		} else if apierrors.IsNotFound(err) {
 			if networkRef.IPAMRef == nil {
 				return nil, nil, errors.New("ipamRef of an ipamConfig is not set")
@@ -115,6 +121,9 @@ func (d *metalDriver) getOrCreateIPAddressClaims(ctx context.Context, req *drive
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      ipAddrClaimKey.Name,
 					Namespace: ipAddrClaimKey.Namespace,
+					Labels: map[string]string{
+						LabelKeyServerClaim: labelValue,
+					},
 				},
 				Spec: capiv1beta1.IPAddressClaimSpec{
 					PoolRef: corev1.TypedLocalObjectReference{

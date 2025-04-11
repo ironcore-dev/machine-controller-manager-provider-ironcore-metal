@@ -149,16 +149,16 @@ var _ = Describe("CreateMachine", func() {
 			Eventually(k8sClient.Get(ctx, ServerClaimKey, ServerClaim)).Should(Succeed())
 
 			for _, ipClaim := range ipClaims {
-				Eventually(Object(ipClaim)).Should(
-					WithTransform(func(ipClaim *capiv1beta1.IPAddressClaim) []metav1.OwnerReference { return ipClaim.GetOwnerReferences() },
-						ContainElement(
-							metav1.OwnerReference{
-								APIVersion: metalv1alpha1.GroupVersion.String(),
-								Kind:       "ServerClaim",
-								Name:       ServerClaim.Name,
-								UID:        ServerClaim.UID,
-							},
-						)))
+				Eventually(Object(ipClaim)).Should(SatisfyAll(
+					HaveField("Labels", HaveKeyWithValue(LabelKeyServerClaim, ServerClaim.Namespace+"_"+ServerClaim.Name)),
+					HaveField("OwnerReferences", ContainElement(
+						metav1.OwnerReference{
+							APIVersion: metalv1alpha1.GroupVersion.String(),
+							Kind:       "ServerClaim",
+							Name:       ServerClaim.Name,
+							UID:        ServerClaim.UID,
+						},
+					))))
 			}
 
 			By("ensuring that the ignition secret has been created")
