@@ -150,7 +150,8 @@ var _ = Describe("CreateMachine", func() {
 
 			for _, ipClaim := range ipClaims {
 				Eventually(Object(ipClaim)).Should(SatisfyAll(
-					HaveField("Labels", HaveKeyWithValue(LabelKeyServerClaim, ServerClaim.Namespace+"_"+ServerClaim.Name)),
+					HaveField("Labels", HaveKeyWithValue(LabelKeyServerClaimName, ServerClaim.Name)),
+					HaveField("Labels", HaveKeyWithValue(LabelKeyServerClaimNamespace, ns.Name)),
 					HaveField("OwnerReferences", ContainElement(
 						metav1.OwnerReference{
 							APIVersion: metalv1alpha1.GroupVersion.String(),
