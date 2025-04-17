@@ -274,7 +274,18 @@ func (d *metalDriver) setServerClaimOwnership(ctx context.Context, serverClaim *
 	defer d.clientProvider.Unlock()
 	metalClient := d.clientProvider.Client
 
-	if err := metalClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim); err != nil {
+	err := wait.PollUntilContextTimeout(
+		ctx,
+		time.Millisecond*50,
+		time.Millisecond*340,
+		true,
+		func(ctx context.Context) (bool, error) {
+			if err := metalClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim); err != nil {
+				return false, err
+			}
+			return true, nil
+		})
+	if err != nil {
 		return err
 	}
 
