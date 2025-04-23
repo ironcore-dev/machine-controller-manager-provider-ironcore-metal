@@ -1,7 +1,6 @@
 module github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal
 
-go 1.23.0
-toolchain go1.24.1
+go 1.24.0
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
