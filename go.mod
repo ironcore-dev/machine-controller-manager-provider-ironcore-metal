@@ -23,6 +23,8 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
+replace github.com/gardener/machine-controller-manager => github.com/afritzler/machine-controller-manager v0.0.0-20250514112441-bbd98c0e8666
+
 require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
