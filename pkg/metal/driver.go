@@ -30,9 +30,10 @@ var (
 )
 
 type metalDriver struct {
-	Schema         *runtime.Scheme
-	clientProvider *mcmclient.Provider
-	metalNamespace string
+	Schema                  *runtime.Scheme
+	clientProvider          *mcmclient.Provider
+	metalNamespace          string
+	useServerNameAsNodeName bool
 }
 
 func (d *metalDriver) InitializeMachine(ctx context.Context, request *driver.InitializeMachineRequest) (*driver.InitializeMachineResponse, error) {
@@ -44,10 +45,11 @@ func (d *metalDriver) GetVolumeIDs(_ context.Context, req *driver.GetVolumeIDsRe
 }
 
 // NewDriver returns a new Gardener metal driver object
-func NewDriver(cp *mcmclient.Provider, namespace string) driver.Driver {
+func NewDriver(cp *mcmclient.Provider, namespace string, useServerNameAsNodeName bool) driver.Driver {
 	return &metalDriver{
-		clientProvider: cp,
-		metalNamespace: namespace,
+		clientProvider:          cp,
+		metalNamespace:          namespace,
+		useServerNameAsNodeName: useServerNameAsNodeName,
 	}
 }
 
@@ -56,7 +58,7 @@ func (d *metalDriver) GenerateMachineClassForMigration(_ context.Context, _ *dri
 }
 
 func (d *metalDriver) getIgnitionNameForMachine(ctx context.Context, machineName string) string {
-	//for backward compatibility checking if ignition secret was already present with old naming convention
+	//for backward compatibility checking if the ignition secret was already present with the old naming convention
 	ignitionSecretName := fmt.Sprintf("%s-%s", machineName, "ignition")
 	d.clientProvider.Lock()
 	defer d.clientProvider.Unlock()

@@ -74,9 +74,17 @@ func (d *metalDriver) CreateMachine(ctx context.Context, req *driver.CreateMachi
 		return nil, err
 	}
 
+	nodeName := serverClaim.Name
+	if d.useServerNameAsNodeName {
+		if serverClaim.Spec.ServerRef == nil {
+			return nil, status.Error(codes.Internal, "server claim does not have a server ref")
+		}
+		nodeName = serverClaim.Spec.ServerRef.Name
+	}
+
 	return &driver.CreateMachineResponse{
 		ProviderID: getProviderIDForServerClaim(serverClaim),
-		NodeName:   serverClaim.Name,
+		NodeName:   nodeName,
 	}, nil
 }
 
@@ -230,7 +238,7 @@ func (d *metalDriver) applyIgnition(ctx context.Context, req *driver.CreateMachi
 	return ignitionSecret, nil
 }
 
-// applyServerClaim reserves a Server by creating corresponding ServerClaim object with proper ignition data
+// applyServerClaim reserves a Server by creating a corresponding ServerClaim object with proper ignition data
 func (d *metalDriver) applyServerClaim(ctx context.Context, req *driver.CreateMachineRequest, providerSpec *apiv1alpha1.ProviderSpec, ignitionSecret *corev1.Secret) (*metalv1alpha1.ServerClaim, error) {
 	serverClaim := &metalv1alpha1.ServerClaim{
 		TypeMeta: metav1.TypeMeta{
@@ -263,6 +271,19 @@ func (d *metalDriver) applyServerClaim(ctx context.Context, req *driver.CreateMa
 
 	if err := metalClient.Patch(ctx, ignitionSecret, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error applying ignition secret: %s", err.Error()))
+	}
+
+	// Wait for the ServerClaim to claim a server
+	if err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 3*time.Second, true, func(ctx context.Context) (bool, error) {
+		if err := metalClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim); err != nil {
+			return false, err
+		}
+		if serverClaim.Spec.ServerRef == nil {
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("error waiting for server claim to claim a server: %s", err.Error()))
 	}
 
 	return serverClaim, nil

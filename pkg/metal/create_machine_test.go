@@ -51,8 +51,23 @@ var _ = Describe("CreateMachine", func() {
 	})
 
 	It("should create a machine", func(ctx SpecContext) {
-		By("creating machine")
 		machineName := "machine-0"
+
+		By("starting a non-blocking goroutine to patch ServerClaim")
+		go func() {
+			defer GinkgoRecover()
+			serverClaim := &metalv1alpha1.ServerClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: ns.Name,
+					Name:      machineName,
+				},
+			}
+			Eventually(Update(serverClaim, func() {
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+			})).Should(Succeed())
+		}()
+
+		By("creating machine")
 		Expect((*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
 			Machine:      newMachine(ns, "machine", -1, nil),
 			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
@@ -134,6 +149,19 @@ var _ = Describe("CreateMachine", func() {
 				ipClaims = append(ipClaims, ipClaim)
 				ips = append(ips, ip)
 			}
+
+			go func() {
+				defer GinkgoRecover()
+				serverClaim := &metalv1alpha1.ServerClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: ns.Name,
+						Name:      machineName,
+					},
+				}
+				Eventually(Update(serverClaim, func() {
+					serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+				})).Should(Succeed())
+			}()
 
 			By("creating machine")
 			_, err := (*drv).CreateMachine(ctx, &driver.CreateMachineRequest{

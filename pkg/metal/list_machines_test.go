@@ -6,11 +6,16 @@ package metal
 import (
 	"fmt"
 
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/metal/testing"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
 var _ = Describe("ListMachines", func() {
@@ -36,6 +41,22 @@ var _ = Describe("ListMachines", func() {
 	})
 
 	It("should list a single machine if one has been created", func(ctx SpecContext) {
+		machineName := "machine-0"
+
+		By("starting a non-blocking goroutine to patch ServerClaim")
+		go func() {
+			defer GinkgoRecover()
+			serverClaim := &metalv1alpha1.ServerClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: ns.Name,
+					Name:      machineName,
+				},
+			}
+			Eventually(Update(serverClaim, func() {
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+			})).Should(Succeed())
+		}()
+
 		By("creating a machine")
 		craeteMachineResponse, err := (*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
 			Machine:      newMachine(ns, "machine", -1, nil),
@@ -67,6 +88,23 @@ var _ = Describe("ListMachines", func() {
 	})
 
 	It("should list two machines if two have been created", func(ctx SpecContext) {
+		machineName := "machine-0"
+		machineName2 := "machine-1"
+
+		By("starting a non-blocking goroutine to patch ServerClaim")
+		go func() {
+			defer GinkgoRecover()
+			serverClaim := &metalv1alpha1.ServerClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: ns.Name,
+					Name:      machineName,
+				},
+			}
+			Eventually(Update(serverClaim, func() {
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+			})).Should(Succeed())
+		}()
+
 		By("creating the first machine")
 		craeteMachineResponse, err := (*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
 			Machine:      newMachine(ns, "machine", 0, nil),
@@ -76,8 +114,21 @@ var _ = Describe("ListMachines", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(craeteMachineResponse).To(Equal(&driver.CreateMachineResponse{
 			ProviderID: fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0),
-			NodeName:   "machine-0",
+			NodeName:   machineName,
 		}))
+
+		go func() {
+			defer GinkgoRecover()
+			serverClaim := &metalv1alpha1.ServerClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: ns.Name,
+					Name:      machineName2,
+				},
+			}
+			Eventually(Update(serverClaim, func() {
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo-2"}
+			})).Should(Succeed())
+		}()
 
 		By("creating the second machine")
 		craeteMachineResponse, err = (*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
@@ -88,7 +139,7 @@ var _ = Describe("ListMachines", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(craeteMachineResponse).To(Equal(&driver.CreateMachineResponse{
 			ProviderID: fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 1),
-			NodeName:   "machine-1",
+			NodeName:   machineName2,
 		}))
 
 		By("ensuring the machine status contains 2 machines")
@@ -98,8 +149,8 @@ var _ = Describe("ListMachines", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(listMachinesResponse.MachineList).To(Equal(map[string]string{
-			fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0): "machine-0",
-			fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 1): "machine-1",
+			fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0): machineName,
+			fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 1): machineName2,
 		}))
 
 		By("ensuring the cleanup of the first machine")

@@ -114,7 +114,7 @@ func SetupTest() (*corev1.Namespace, *corev1.Secret, *driver.Driver) {
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed(), "failed to create test namespace")
 		DeferCleanup(k8sClient.Delete, ns)
 
-		// create kubeconfig which we will use as the provider secret to create our metal machine
+		// create kubeconfig, which we will use as the provider secret to create our metal machine
 		user, err := testEnv.AddUser(envtest.User{
 			Name:   "dummy",
 			Groups: []string{"system:authenticated", "system:masters"},
@@ -138,7 +138,53 @@ func SetupTest() (*corev1.Namespace, *corev1.Secret, *driver.Driver) {
 		}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
-		drv = NewDriver(&mcmclient.Provider{Client: userClient}, ns.Name)
+		drv = NewDriver(&mcmclient.Provider{Client: userClient}, ns.Name, false)
+	})
+
+	return ns, secret, &drv
+}
+
+func SetupTestUsingServerNames() (*corev1.Namespace, *corev1.Secret, *driver.Driver) {
+	var (
+		drv driver.Driver
+	)
+	ns := &corev1.Namespace{}
+	secret := &corev1.Secret{}
+
+	BeforeEach(func(ctx SpecContext) {
+		*ns = corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "testns-",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed(), "failed to create test namespace")
+		DeferCleanup(k8sClient.Delete, ns)
+
+		// create kubeconfig, which we will use as the provider secret to create our metal machine
+		user, err := testEnv.AddUser(envtest.User{
+			Name:   "dummy",
+			Groups: []string{"system:authenticated", "system:masters"},
+		}, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		userCfg := user.Config()
+		userClient, err := client.New(userCfg, client.Options{Scheme: scheme.Scheme})
+		Expect(err).NotTo(HaveOccurred())
+
+		// create provider secret for the machine creation
+		secretData := map[string][]byte{}
+		secretData["userData"] = []byte("abcd")
+
+		*secret = corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "machine-secret-",
+				Namespace:    ns.Name,
+			},
+			Data: secretData,
+		}
+		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
+		drv = NewDriver(&mcmclient.Provider{Client: userClient}, ns.Name, true)
 	})
 
 	return ns, secret, &drv

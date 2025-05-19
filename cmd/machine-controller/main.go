@@ -21,7 +21,8 @@ import (
 )
 
 var (
-	KubeconfigPath string
+	KubeconfigPath          string
+	UseServerNameAsNodeName bool
 )
 
 func main() {
@@ -41,11 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	drv := metal.NewDriver(clientProvider, namespace)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
+	drv := metal.NewDriver(clientProvider, namespace, UseServerNameAsNodeName)
 
 	if err := app.Run(s, drv); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -55,4 +52,5 @@ func main() {
 
 func AddExtraFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&KubeconfigPath, "metal-kubeconfig", "", "Path to the metal cluster kubeconfig.")
+	fs.BoolVar(&UseServerNameAsNodeName, "use-server-name-as-node-name", false, "Use server name as node name instead of server claim name.")
 }
