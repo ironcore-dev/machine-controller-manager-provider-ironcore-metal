@@ -112,4 +112,80 @@ WantedBy=multi-user.target
 			},
 		},
 	}
+
+	SampleIgnitionWithFooHostname = map[string]interface{}{
+		"ignition": map[string]interface{}{
+			"version": "3.2.0",
+		},
+		"passwd": map[string]interface{}{
+			"users": []interface{}{
+				map[string]interface{}{
+					"groups": []interface{}{"group1"},
+					"name":   "xyz",
+					"shell":  "/bin/bash",
+				},
+			},
+		},
+		"storage": map[string]interface{}{
+			"files": []interface{}{
+				map[string]interface{}{
+					"overwrite": true,
+					"path":      "/etc/hostname",
+					"contents": map[string]interface{}{
+						"compression": "",
+						"source":      "data:,foo%0A",
+					},
+					"mode": 420.0,
+				},
+				map[string]interface{}{
+					"overwrite": true,
+					"path":      "/var/lib/metal-cloud-config/init.sh",
+					"contents": map[string]interface{}{
+						"source":      "data:,abcd%0A",
+						"compression": "",
+					},
+					"mode": 493.0,
+				},
+				map[string]interface{}{
+					"path": "/etc/systemd/resolved.conf.d/dns.conf",
+					"contents": map[string]interface{}{
+						"compression": "",
+						"source":      "data:,%5BResolve%5D%0ADNS%3D1.2.3.4%0ADNS%3D5.6.7.8",
+					},
+					"mode": 420.0,
+				},
+				map[string]interface{}{
+					"path": "/var/lib/metal-cloud-config/metadata",
+					"contents": map[string]interface{}{
+						"compression": "",
+						"source":      "data:;base64,eyJiYXoiOiIxMDAiLCJmb28iOiJiYXIifQ==",
+					},
+					"mode": 420.0,
+				},
+			},
+		},
+		"systemd": map[string]interface{}{
+			"units": []interface{}{
+				map[string]interface{}{
+					"contents": `[Unit]
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/metal-cloud-config/init.done
+
+[Service]
+Type=oneshot
+ExecStart=/var/lib/metal-cloud-config/init.sh
+ExecStopPost=touch /var/lib/metal-cloud-config/init.done
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+`,
+					"enabled": true,
+					"name":    "cloud-config-init.service",
+				},
+			},
+		},
+	}
 )
