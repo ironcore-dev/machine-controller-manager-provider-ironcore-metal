@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
+
 	"github.com/imdario/mergo"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -59,25 +61,81 @@ func (d *metalDriver) CreateMachine(ctx context.Context, req *driver.CreateMachi
 		return nil, err
 	}
 
-	ignitionSecret, err := d.applyIgnition(ctx, req, providerSpec, addressesMetaData)
+	ignitionSecret, err := d.generateIgnition(ctx, req, req.Machine.Name, providerSpec, addressesMetaData)
 	if err != nil {
 		return nil, err
 	}
 
-	serverClaim, err := d.applyServerClaim(ctx, req, providerSpec, ignitionSecret)
+	serverClaim := d.generateServerClaim(req, providerSpec, ignitionSecret)
+
+	serverClaim, err = d.applyInitialServerClaimAndIgnition(ctx, serverClaim, ignitionSecret)
 	if err != nil {
 		return nil, err
 	}
 
-	err = d.setServerClaimOwnership(ctx, serverClaim, addressClaims)
-	if err != nil {
+	if err := d.setServerClaimOwnershipToIPAddressClaim(ctx, serverClaim, addressClaims); err != nil {
 		return nil, err
+	}
+
+	nodeName := serverClaim.Name
+	if d.nodeNamePolicy == cmd.NodeNamePolicyServerName {
+		if serverClaim.Spec.ServerRef == nil {
+			return nil, status.Error(codes.Internal, "server claim does not have a server ref")
+		}
+		nodeName = serverClaim.Spec.ServerRef.Name
+	}
+
+	if err := d.updateHostnameAndPowerOnServer(ctx, req, serverClaim, providerSpec, addressesMetaData, nodeName); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	return &driver.CreateMachineResponse{
 		ProviderID: getProviderIDForServerClaim(serverClaim),
-		NodeName:   serverClaim.Name,
+		NodeName:   nodeName,
 	}, nil
+}
+
+func (d *metalDriver) generateServerClaim(req *driver.CreateMachineRequest, spec *apiv1alpha1.ProviderSpec, secret *corev1.Secret) *metalv1alpha1.ServerClaim {
+	return &metalv1alpha1.ServerClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: metalv1alpha1.GroupVersion.String(),
+			Kind:       "ServerClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Machine.Name,
+			Namespace: d.metalNamespace,
+			Labels:    spec.Labels,
+		},
+		Spec: metalv1alpha1.ServerClaimSpec{
+			Power: metalv1alpha1.PowerOff, // we will power on the server later
+			ServerSelector: &metav1.LabelSelector{
+				MatchLabels:      spec.ServerLabels,
+				MatchExpressions: nil,
+			},
+			IgnitionSecretRef: &corev1.LocalObjectReference{Name: secret.Name},
+			Image:             spec.Image,
+		},
+	}
+}
+
+func (d *metalDriver) updateHostnameAndPowerOnServer(ctx context.Context, req *driver.CreateMachineRequest, serverClaim *metalv1alpha1.ServerClaim, providerSpec *apiv1alpha1.ProviderSpec, addressesMetaData map[string]any, hostname string) error {
+	ignitionSecret, err := d.generateIgnition(ctx, req, hostname, providerSpec, addressesMetaData)
+	if err != nil {
+		return err
+	}
+
+	if err := d.clientProvider.Client.Patch(ctx, ignitionSecret, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
+		return err
+	}
+
+	serverClaimBase := serverClaim.DeepCopy()
+	serverClaim.Spec.Power = metalv1alpha1.PowerOn
+
+	if err := d.clientProvider.Client.Patch(ctx, serverClaim, client.MergeFrom(serverClaimBase)); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // isEmptyCreateRequest checks if any of the fields in CreateMachineRequest is empty
@@ -181,8 +239,8 @@ func (d *metalDriver) getOrCreateIPAddressClaims(ctx context.Context, req *drive
 	return ipAddressClaims, addressesMetaData, nil
 }
 
-// applyIgnition creates an ignition file for the machine and stores it in a secret
-func (d *metalDriver) applyIgnition(ctx context.Context, req *driver.CreateMachineRequest, providerSpec *apiv1alpha1.ProviderSpec, addressesMetaData map[string]any) (*corev1.Secret, error) {
+// generateIgnition creates an ignition file for the machine and stores it in a secret
+func (d *metalDriver) generateIgnition(ctx context.Context, req *driver.CreateMachineRequest, hostname string, providerSpec *apiv1alpha1.ProviderSpec, addressesMetaData map[string]any) (*corev1.Secret, error) {
 	// Get userData from machine secret
 	userData, ok := req.Secret.Data["userData"]
 	if !ok {
@@ -201,7 +259,7 @@ func (d *metalDriver) applyIgnition(ctx context.Context, req *driver.CreateMachi
 
 	// Construct ignition file config
 	config := &ignition.Config{
-		Hostname:         req.Machine.Name,
+		Hostname:         hostname,
 		UserData:         string(userData),
 		MetaData:         providerSpec.Metadata,
 		Ignition:         providerSpec.Ignition,
@@ -230,34 +288,13 @@ func (d *metalDriver) applyIgnition(ctx context.Context, req *driver.CreateMachi
 	return ignitionSecret, nil
 }
 
-// applyServerClaim reserves a Server by creating corresponding ServerClaim object with proper ignition data
-func (d *metalDriver) applyServerClaim(ctx context.Context, req *driver.CreateMachineRequest, providerSpec *apiv1alpha1.ProviderSpec, ignitionSecret *corev1.Secret) (*metalv1alpha1.ServerClaim, error) {
-	serverClaim := &metalv1alpha1.ServerClaim{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: metalv1alpha1.GroupVersion.String(),
-			Kind:       "ServerClaim",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Machine.Name,
-			Namespace: d.metalNamespace,
-			Labels:    providerSpec.Labels,
-		},
-		Spec: metalv1alpha1.ServerClaimSpec{
-			Power: "On",
-			ServerSelector: &metav1.LabelSelector{
-				MatchLabels:      providerSpec.ServerLabels,
-				MatchExpressions: nil,
-			},
-			IgnitionSecretRef: &corev1.LocalObjectReference{Name: ignitionSecret.Name},
-			Image:             providerSpec.Image,
-		},
-	}
-
+// applyInitialServerClaimAndIgnition reserves a Server by creating a corresponding ServerClaim object with proper ignition data
+func (d *metalDriver) applyInitialServerClaimAndIgnition(ctx context.Context, claim *metalv1alpha1.ServerClaim, ignitionSecret *corev1.Secret) (*metalv1alpha1.ServerClaim, error) {
 	d.clientProvider.Lock()
 	defer d.clientProvider.Unlock()
 	metalClient := d.clientProvider.Client
 
-	if err := metalClient.Patch(ctx, serverClaim, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
+	if err := metalClient.Patch(ctx, claim, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error applying metal machine: %s", err.Error()))
 	}
 
@@ -265,11 +302,27 @@ func (d *metalDriver) applyServerClaim(ctx context.Context, req *driver.CreateMa
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error applying ignition secret: %s", err.Error()))
 	}
 
-	return serverClaim, nil
+	// Wait for the ServerClaim to claim a server
+	if err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 3*time.Second, true, func(ctx context.Context) (bool, error) {
+		if claim.Spec.ServerRef != nil { // early return if the server ref is already set
+			return true, nil
+		}
+		if err := metalClient.Get(ctx, client.ObjectKeyFromObject(claim), claim); err != nil {
+			return false, err
+		}
+		if claim.Spec.ServerRef == nil {
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("error waiting for server claim to claim a server: %s", err.Error()))
+	}
+
+	return claim, nil
 }
 
-// setServerClaimOwnership sets the owner reference of the IPAddressClaims to the ServerClaim
-func (d *metalDriver) setServerClaimOwnership(ctx context.Context, serverClaim *metalv1alpha1.ServerClaim, IPAddressClaims []*capiv1beta1.IPAddressClaim) error {
+// setServerClaimOwnershipToIPAddressClaim sets the owner reference of the IPAddressClaims to the ServerClaim
+func (d *metalDriver) setServerClaimOwnershipToIPAddressClaim(ctx context.Context, serverClaim *metalv1alpha1.ServerClaim, IPAddressClaims []*capiv1beta1.IPAddressClaim) error {
 	d.clientProvider.Lock()
 	defer d.clientProvider.Unlock()
 	metalClient := d.clientProvider.Client

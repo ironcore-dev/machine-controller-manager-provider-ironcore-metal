@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
+
 	_ "github.com/gardener/machine-controller-manager/pkg/util/client/metrics/prometheus" // for client metric registration
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/app"
 	mcmoptions "github.com/gardener/machine-controller-manager/pkg/util/provider/app/options"
@@ -22,6 +24,7 @@ import (
 
 var (
 	KubeconfigPath string
+	nodeNamePolicy cmd.NodeNamePolicy
 )
 
 func main() {
@@ -41,11 +44,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	drv := metal.NewDriver(clientProvider, namespace)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
+	drv := metal.NewDriver(clientProvider, namespace, nodeNamePolicy)
 
 	if err := app.Run(s, drv); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -55,4 +54,5 @@ func main() {
 
 func AddExtraFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&KubeconfigPath, "metal-kubeconfig", "", "Path to the metal cluster kubeconfig.")
+	fs.Var(&nodeNamePolicy, "node-name-policy", "Define the node name policy. Possible values are 'ServerName' and 'ServerClaimName'.")
 }

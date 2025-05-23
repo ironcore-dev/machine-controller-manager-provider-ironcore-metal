@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
+
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/codes"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/status"
@@ -40,9 +42,17 @@ func (d *metalDriver) GetMachineStatus(ctx context.Context, req *driver.GetMachi
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	nodeName := serverClaim.Name
+	if d.nodeNamePolicy == cmd.NodeNamePolicyServerName {
+		if serverClaim.Spec.ServerRef == nil {
+			return nil, status.Error(codes.Internal, "server claim does not have a server ref")
+		}
+		nodeName = serverClaim.Spec.ServerRef.Name
+	}
+
 	return &driver.GetMachineStatusResponse{
 		ProviderID: getProviderIDForServerClaim(serverClaim),
-		NodeName:   serverClaim.Name,
+		NodeName:   nodeName,
 	}, nil
 }
 

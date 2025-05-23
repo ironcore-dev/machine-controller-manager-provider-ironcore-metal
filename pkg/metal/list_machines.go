@@ -29,7 +29,7 @@ func (d *metalDriver) ListMachines(ctx context.Context, req *driver.ListMachines
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("provider spec for requested provider '%s' is invalid: %v", req.MachineClass.Provider, err))
 	}
 
-	// Get server claim list
+	// Get a server claim list
 	serverClaimList := &metalv1alpha1.ServerClaimList{}
 	matchingLabels := client.MatchingLabels{}
 	for k, v := range providerSpec.Labels {

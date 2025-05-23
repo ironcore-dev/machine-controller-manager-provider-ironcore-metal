@@ -19,9 +19,24 @@ import (
 )
 
 var _ = Describe("DeleteMachine", func() {
-	ns, providerSecret, drv := SetupTest()
+	ns, providerSecret, drv := SetupTest("")
 
 	It("should create and delete a machine", func(ctx SpecContext) {
+		machineName := "machine-0"
+
+		go func() {
+			defer GinkgoRecover()
+			serverClaim := &metalv1alpha1.ServerClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: ns.Name,
+					Name:      machineName,
+				},
+			}
+			Eventually(Update(serverClaim, func() {
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+			})).Should(Succeed())
+		}()
+
 		By("creating an metal machine")
 		Expect((*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
 			Machine:      newMachine(ns, "machine", -1, nil),
@@ -29,20 +44,20 @@ var _ = Describe("DeleteMachine", func() {
 			Secret:       providerSecret,
 		})).To(Equal(&driver.CreateMachineResponse{
 			ProviderID: fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0),
-			NodeName:   "machine-0",
+			NodeName:   machineName,
 		}))
 
 		serverClaim := &metalv1alpha1.ServerClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: ns.Name,
-				Name:      "machine-0",
+				Name:      machineName,
 			},
 		}
 
 		ignition := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: ns.Name,
-				Name:      "machine-0",
+				Name:      machineName,
 			},
 		}
 
@@ -63,13 +78,30 @@ var _ = Describe("DeleteMachine", func() {
 	})
 
 	It("should create and delete a machine igntition secret created with old naming convention", func(ctx SpecContext) {
+		machineName := "machine-0"
+
 		By("creating an ignition secret")
 		ignition := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: ns.Name,
-				Name:      "machine-0",
+				Name:      machineName,
 			},
 		}
+
+		By("starting a non-blocking goroutine to patch ServerClaim")
+		go func() {
+			defer GinkgoRecover()
+			serverClaim := &metalv1alpha1.ServerClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: ns.Name,
+					Name:      machineName,
+				},
+			}
+			Eventually(Update(serverClaim, func() {
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+			})).Should(Succeed())
+		}()
+
 		By("creating an metal machine")
 		Expect((*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
 			Machine:      newMachine(ns, "machine", -1, nil),
@@ -77,13 +109,13 @@ var _ = Describe("DeleteMachine", func() {
 			Secret:       providerSecret,
 		})).To(Equal(&driver.CreateMachineResponse{
 			ProviderID: fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0),
-			NodeName:   "machine-0",
+			NodeName:   machineName,
 		}))
 
 		serverClaim := &metalv1alpha1.ServerClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: ns.Name,
-				Name:      "machine-0",
+				Name:      machineName,
 			},
 		}
 

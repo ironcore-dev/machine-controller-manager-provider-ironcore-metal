@@ -11,11 +11,13 @@ import (
 	"testing"
 	"time"
 
-	gardenermachinev1alpha1 "github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
+	mcmclient "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/client"
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
+
+	gardenermachinev1alpha1 "github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	"github.com/ironcore-dev/controller-utils/modutils"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
-	mcmclient "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/client"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -98,7 +100,7 @@ var _ = BeforeSuite(func() {
 	SetClient(k8sClient)
 })
 
-func SetupTest() (*corev1.Namespace, *corev1.Secret, *driver.Driver) {
+func SetupTest(nodeNamePolicy cmd.NodeNamePolicy) (*corev1.Namespace, *corev1.Secret, *driver.Driver) {
 	var (
 		drv driver.Driver
 	)
@@ -114,7 +116,7 @@ func SetupTest() (*corev1.Namespace, *corev1.Secret, *driver.Driver) {
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed(), "failed to create test namespace")
 		DeferCleanup(k8sClient.Delete, ns)
 
-		// create kubeconfig which we will use as the provider secret to create our metal machine
+		// create kubeconfig, which we will use as the provider secret to create our metal machine
 		user, err := testEnv.AddUser(envtest.User{
 			Name:   "dummy",
 			Groups: []string{"system:authenticated", "system:masters"},
@@ -138,7 +140,7 @@ func SetupTest() (*corev1.Namespace, *corev1.Secret, *driver.Driver) {
 		}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
-		drv = NewDriver(&mcmclient.Provider{Client: userClient}, ns.Name)
+		drv = NewDriver(&mcmclient.Provider{Client: userClient}, ns.Name, nodeNamePolicy)
 	})
 
 	return ns, secret, &drv
