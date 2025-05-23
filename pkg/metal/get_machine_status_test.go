@@ -6,6 +6,8 @@ package metal
 import (
 	"fmt"
 
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
+
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/codes"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/status"
@@ -20,7 +22,7 @@ import (
 )
 
 var _ = Describe("GetMachineStatus", func() {
-	ns, providerSecret, drv := SetupTest()
+	ns, providerSecret, drv := SetupTest(cmd.NodeNamePolicyServerClaimName)
 
 	It("should create a machine and ensure status", func(ctx SpecContext) {
 		By("check empty request")
@@ -70,7 +72,7 @@ var _ = Describe("GetMachineStatus", func() {
 })
 
 var _ = Describe("GetMachineStatus using Server names", func() {
-	ns, providerSecret, drv := SetupTestUsingServerNames()
+	ns, providerSecret, drv := SetupTest(cmd.NodeNamePolicyServerName)
 
 	It("should create a machine and ensure status", func(ctx SpecContext) {
 		machineName := "machine-0"

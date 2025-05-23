@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
+
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/codes"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/status"
@@ -30,26 +32,26 @@ var (
 )
 
 type metalDriver struct {
-	Schema                  *runtime.Scheme
-	clientProvider          *mcmclient.Provider
-	metalNamespace          string
-	useServerNameAsNodeName bool
+	Schema         *runtime.Scheme
+	clientProvider *mcmclient.Provider
+	metalNamespace string
+	nodeNamePolicy cmd.NodeNamePolicy
 }
 
-func (d *metalDriver) InitializeMachine(ctx context.Context, request *driver.InitializeMachineRequest) (*driver.InitializeMachineResponse, error) {
+func (d *metalDriver) InitializeMachine(_ context.Context, _ *driver.InitializeMachineRequest) (*driver.InitializeMachineResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "Metal Provider does not yet implement InitializeMachine")
 }
 
-func (d *metalDriver) GetVolumeIDs(_ context.Context, req *driver.GetVolumeIDsRequest) (*driver.GetVolumeIDsResponse, error) {
+func (d *metalDriver) GetVolumeIDs(_ context.Context, _ *driver.GetVolumeIDsRequest) (*driver.GetVolumeIDsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "Metal Provider does not yet implement GetVolumeIDs")
 }
 
 // NewDriver returns a new Gardener metal driver object
-func NewDriver(cp *mcmclient.Provider, namespace string, useServerNameAsNodeName bool) driver.Driver {
+func NewDriver(cp *mcmclient.Provider, namespace string, nodeNamePolicy cmd.NodeNamePolicy) driver.Driver {
 	return &metalDriver{
-		clientProvider:          cp,
-		metalNamespace:          namespace,
-		useServerNameAsNodeName: useServerNameAsNodeName,
+		clientProvider: cp,
+		metalNamespace: namespace,
+		nodeNamePolicy: nodeNamePolicy,
 	}
 }
 

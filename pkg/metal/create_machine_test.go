@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"maps"
 
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
+
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/metal/testing"
@@ -23,7 +25,7 @@ import (
 )
 
 var _ = Describe("CreateMachine", func() {
-	ns, providerSecret, drv := SetupTest()
+	ns, providerSecret, drv := SetupTest(cmd.NodeNamePolicyServerClaimName)
 
 	It("should create a machine", func(ctx SpecContext) {
 		machineName := "machine-0"
@@ -92,7 +94,9 @@ var _ = Describe("CreateMachine", func() {
 			_, err := (*drv).CreateMachine(ctx, nil)
 			g.Expect(err.Error()).To(ContainSubstring("received empty request"))
 		}).Should(Succeed())
+	})
 
+	It("should fail if the machine class is empty", func(ctx SpecContext) {
 		By("failing if the wrong provider is set")
 		Eventually(func(g Gomega) {
 			_, err := (*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
@@ -207,7 +211,7 @@ var _ = Describe("CreateMachine", func() {
 })
 
 var _ = Describe("CreateMachine with Server name as hostname", func() {
-	ns, providerSecret, drv := SetupTestUsingServerNames()
+	ns, providerSecret, drv := SetupTest(cmd.NodeNamePolicyServerName)
 
 	It("should create a machine", func(ctx SpecContext) {
 		machineName := "machine-0"

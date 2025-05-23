@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
+
 	"github.com/imdario/mergo"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -76,7 +78,7 @@ func (d *metalDriver) CreateMachine(ctx context.Context, req *driver.CreateMachi
 	}
 
 	nodeName := serverClaim.Name
-	if d.useServerNameAsNodeName {
+	if d.nodeNamePolicy == cmd.NodeNamePolicyServerName {
 		if serverClaim.Spec.ServerRef == nil {
 			return nil, status.Error(codes.Internal, "server claim does not have a server ref")
 		}

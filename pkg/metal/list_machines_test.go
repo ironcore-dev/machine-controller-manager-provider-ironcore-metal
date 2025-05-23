@@ -19,7 +19,7 @@ import (
 )
 
 var _ = Describe("ListMachines", func() {
-	ns, providerSecret, drv := SetupTest()
+	ns, providerSecret, drv := SetupTest("")
 
 	It("should fail if no provider has been set", func(ctx SpecContext) {
 		By("ensuring an error if no provider has been set")

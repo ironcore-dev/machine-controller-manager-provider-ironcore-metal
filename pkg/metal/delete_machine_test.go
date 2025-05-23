@@ -19,7 +19,7 @@ import (
 )
 
 var _ = Describe("DeleteMachine", func() {
-	ns, providerSecret, drv := SetupTest()
+	ns, providerSecret, drv := SetupTest("")
 
 	It("should create and delete a machine", func(ctx SpecContext) {
 		machineName := "machine-0"
