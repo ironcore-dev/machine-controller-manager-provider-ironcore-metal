@@ -23,6 +23,17 @@ var _ = Describe("DeleteMachine", func() {
 
 	It("should create and delete a machine", func(ctx SpecContext) {
 		machineName := "machine-0"
+		By("creating a server")
+		server := &metalv1alpha1.Server{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-server",
+			},
+			Spec: metalv1alpha1.ServerSpec{
+				SystemUUID: "12345",
+			},
+		}
+		Expect(k8sClient.Create(ctx, server)).To(Succeed())
+		DeferCleanup(k8sClient.Delete, server)
 
 		go func() {
 			defer GinkgoRecover()
@@ -33,7 +44,7 @@ var _ = Describe("DeleteMachine", func() {
 				},
 			}
 			Eventually(Update(serverClaim, func() {
-				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: server.Name}
 			})).Should(Succeed())
 		}()
 
@@ -77,8 +88,19 @@ var _ = Describe("DeleteMachine", func() {
 		Eventually(Get(ignition)).Should(Satisfy(apierrors.IsNotFound))
 	})
 
-	It("should create and delete a machine igntition secret created with old naming convention", func(ctx SpecContext) {
+	It("should create and delete a machine ignition secret created with old naming convention", func(ctx SpecContext) {
 		machineName := "machine-0"
+		By("creating a server")
+		server := &metalv1alpha1.Server{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-server",
+			},
+			Spec: metalv1alpha1.ServerSpec{
+				SystemUUID: "12345",
+			},
+		}
+		Expect(k8sClient.Create(ctx, server)).To(Succeed())
+		DeferCleanup(k8sClient.Delete, server)
 
 		By("creating an ignition secret")
 		ignition := &corev1.Secret{
@@ -98,7 +120,7 @@ var _ = Describe("DeleteMachine", func() {
 				},
 			}
 			Eventually(Update(serverClaim, func() {
-				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: server.Name}
 			})).Should(Succeed())
 		}()
 

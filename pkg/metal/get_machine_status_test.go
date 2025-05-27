@@ -25,6 +25,18 @@ var _ = Describe("GetMachineStatus", func() {
 	ns, providerSecret, drv := SetupTest(cmd.NodeNamePolicyServerClaimName)
 
 	It("should create a machine and ensure status", func(ctx SpecContext) {
+		By("creating a server")
+		server := &metalv1alpha1.Server{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-server",
+			},
+			Spec: metalv1alpha1.ServerSpec{
+				SystemUUID: "12345",
+			},
+		}
+		Expect(k8sClient.Create(ctx, server)).To(Succeed())
+		DeferCleanup(k8sClient.Delete, server)
+
 		By("check empty request")
 		emptyMacReq := &driver.GetMachineStatusRequest{
 			Machine:      nil,
@@ -45,7 +57,7 @@ var _ = Describe("GetMachineStatus", func() {
 				},
 			}
 			Eventually(Update(serverClaim, func() {
-				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: server.Name}
 			})).Should(Succeed())
 		}()
 
@@ -76,6 +88,17 @@ var _ = Describe("GetMachineStatus using Server names", func() {
 
 	It("should create a machine and ensure status", func(ctx SpecContext) {
 		machineName := "machine-0"
+		By("creating a server")
+		server := &metalv1alpha1.Server{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-server",
+			},
+			Spec: metalv1alpha1.ServerSpec{
+				SystemUUID: "12345",
+			},
+		}
+		Expect(k8sClient.Create(ctx, server)).To(Succeed())
+		DeferCleanup(k8sClient.Delete, server)
 
 		By("starting a non-blocking goroutine to patch ServerClaim")
 		go func() {
@@ -87,7 +110,7 @@ var _ = Describe("GetMachineStatus using Server names", func() {
 				},
 			}
 			Eventually(Update(serverClaim, func() {
-				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: server.Name}
 			})).Should(Succeed())
 		}()
 
@@ -98,7 +121,7 @@ var _ = Describe("GetMachineStatus using Server names", func() {
 			Secret:       providerSecret,
 		})).To(Equal(&driver.CreateMachineResponse{
 			ProviderID: fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0),
-			NodeName:   "foo",
+			NodeName:   server.Name,
 		}))
 
 		By("ensuring the machine status")
@@ -108,7 +131,7 @@ var _ = Describe("GetMachineStatus using Server names", func() {
 			Secret:       providerSecret,
 		})).To(Equal(&driver.GetMachineStatusResponse{
 			ProviderID: fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0),
-			NodeName:   "foo",
+			NodeName:   server.Name,
 		}))
 	})
 })

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
@@ -61,7 +62,7 @@ func (d *metalDriver) CreateMachine(ctx context.Context, req *driver.CreateMachi
 		return nil, err
 	}
 
-	ignitionSecret, err := d.generateIgnition(ctx, req, req.Machine.Name, providerSpec, addressesMetaData)
+	ignitionSecret, err := d.generateIgnition(ctx, req, req.Machine.Name, providerSpec, addressesMetaData, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +86,7 @@ func (d *metalDriver) CreateMachine(ctx context.Context, req *driver.CreateMachi
 		nodeName = serverClaim.Spec.ServerRef.Name
 	}
 
-	if err := d.updateHostnameAndPowerOnServer(ctx, req, serverClaim, providerSpec, addressesMetaData, nodeName); err != nil {
+	if err := d.updateIgnitionAndPowerOnServer(ctx, req, serverClaim, providerSpec, addressesMetaData, nodeName); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -118,8 +119,13 @@ func (d *metalDriver) generateServerClaim(req *driver.CreateMachineRequest, spec
 	}
 }
 
-func (d *metalDriver) updateHostnameAndPowerOnServer(ctx context.Context, req *driver.CreateMachineRequest, serverClaim *metalv1alpha1.ServerClaim, providerSpec *apiv1alpha1.ProviderSpec, addressesMetaData map[string]any, hostname string) error {
-	ignitionSecret, err := d.generateIgnition(ctx, req, hostname, providerSpec, addressesMetaData)
+func (d *metalDriver) updateIgnitionAndPowerOnServer(ctx context.Context, req *driver.CreateMachineRequest, serverClaim *metalv1alpha1.ServerClaim, providerSpec *apiv1alpha1.ProviderSpec, addressesMetaData map[string]any, hostname string) error {
+	serverMetadata, err := d.extractServerMetadataFromClaim(ctx, serverClaim)
+	if err != nil {
+		return status.Error(codes.Internal, fmt.Sprintf("error extracting server metadata from claim: %s", err.Error()))
+	}
+
+	ignitionSecret, err := d.generateIgnition(ctx, req, hostname, providerSpec, addressesMetaData, serverMetadata)
 	if err != nil {
 		return err
 	}
@@ -240,7 +246,7 @@ func (d *metalDriver) getOrCreateIPAddressClaims(ctx context.Context, req *drive
 }
 
 // generateIgnition creates an ignition file for the machine and stores it in a secret
-func (d *metalDriver) generateIgnition(ctx context.Context, req *driver.CreateMachineRequest, hostname string, providerSpec *apiv1alpha1.ProviderSpec, addressesMetaData map[string]any) (*corev1.Secret, error) {
+func (d *metalDriver) generateIgnition(ctx context.Context, req *driver.CreateMachineRequest, hostname string, providerSpec *apiv1alpha1.ProviderSpec, addressesMetaData map[string]any, serverMetadata *ServerMetadata) (*corev1.Secret, error) {
 	// Get userData from machine secret
 	userData, ok := req.Secret.Data["userData"]
 	if !ok {
@@ -250,6 +256,17 @@ func (d *metalDriver) generateIgnition(ctx context.Context, req *driver.CreateMa
 	// Ensure providerSpec.MetaData is a map[string]any
 	if providerSpec.Metadata == nil {
 		providerSpec.Metadata = make(map[string]any)
+	}
+
+	// Merge server metadata into providerSpec.MetaData
+	if serverMetadata != nil {
+		metadata := map[string]any{}
+		if serverMetadata.LoopbackAddress != nil {
+			metadata["loopbackAddress"] = serverMetadata.LoopbackAddress.String()
+		}
+		if err := mergo.Merge(&providerSpec.Metadata, metadata, mergo.WithOverride); err != nil {
+			return nil, fmt.Errorf("failed to merge server metadata into providerSpec.MetaData: %w", err)
+		}
 	}
 
 	// Merge addressesMetaData into providerSpec.MetaData
@@ -319,6 +336,33 @@ func (d *metalDriver) applyInitialServerClaimAndIgnition(ctx context.Context, cl
 	}
 
 	return claim, nil
+}
+
+type ServerMetadata struct {
+	LoopbackAddress net.IP
+}
+
+func (d *metalDriver) extractServerMetadataFromClaim(ctx context.Context, claim *metalv1alpha1.ServerClaim) (*ServerMetadata, error) {
+	if claim.Spec.ServerRef == nil {
+		return nil, fmt.Errorf("server claim %q does not have a server reference", client.ObjectKeyFromObject(claim))
+	}
+
+	server := &metalv1alpha1.Server{}
+	if err := d.clientProvider.Client.Get(ctx, client.ObjectKey{Name: claim.Spec.ServerRef.Name}, server); err != nil {
+		return nil, fmt.Errorf("failed to get server %q: %w", claim.Spec.ServerRef.Name, err)
+	}
+
+	serverMetadata := &ServerMetadata{}
+
+	loopbackAddress, ok := server.Annotations[apiv1alpha1.LoopbackAddressAnnotation]
+	if ok {
+		addr := net.ParseIP(loopbackAddress)
+		if addr != nil {
+			serverMetadata.LoopbackAddress = addr
+		}
+	}
+
+	return serverMetadata, nil
 }
 
 // setServerClaimOwnershipToIPAddressClaim sets the owner reference of the IPAddressClaims to the ServerClaim

@@ -12,6 +12,8 @@ const (
 	V1Alpha1 = "mcm.gardener.cloud/v1alpha1"
 	// ProviderName is the provider name
 	ProviderName = "ironcore-metal"
+	// LoopbackAddressAnnotation is the annotation used to specify a loopback address for the Machine
+	LoopbackAddressAnnotation = "metal.ironcore.dev/loopback-address"
 )
 
 // ProviderSpec is the spec to be used while parsing the calls

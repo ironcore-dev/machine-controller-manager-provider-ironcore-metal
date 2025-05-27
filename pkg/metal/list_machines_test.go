@@ -42,6 +42,17 @@ var _ = Describe("ListMachines", func() {
 
 	It("should list a single machine if one has been created", func(ctx SpecContext) {
 		machineName := "machine-0"
+		By("creating a server")
+		server := &metalv1alpha1.Server{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-server",
+			},
+			Spec: metalv1alpha1.ServerSpec{
+				SystemUUID: "12345",
+			},
+		}
+		Expect(k8sClient.Create(ctx, server)).To(Succeed())
+		DeferCleanup(k8sClient.Delete, server)
 
 		By("starting a non-blocking goroutine to patch ServerClaim")
 		go func() {
@@ -53,7 +64,7 @@ var _ = Describe("ListMachines", func() {
 				},
 			}
 			Eventually(Update(serverClaim, func() {
-				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: server.Name}
 			})).Should(Succeed())
 		}()
 
@@ -90,6 +101,29 @@ var _ = Describe("ListMachines", func() {
 	It("should list two machines if two have been created", func(ctx SpecContext) {
 		machineName := "machine-0"
 		machineName2 := "machine-1"
+		By("creating a server")
+		server := &metalv1alpha1.Server{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-server",
+			},
+			Spec: metalv1alpha1.ServerSpec{
+				SystemUUID: "12345",
+			},
+		}
+		Expect(k8sClient.Create(ctx, server)).To(Succeed())
+		DeferCleanup(k8sClient.Delete, server)
+
+		By("creating a server")
+		server2 := &metalv1alpha1.Server{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-server-2",
+			},
+			Spec: metalv1alpha1.ServerSpec{
+				SystemUUID: "12345",
+			},
+		}
+		Expect(k8sClient.Create(ctx, server2)).To(Succeed())
+		DeferCleanup(k8sClient.Delete, server2)
 
 		By("starting a non-blocking goroutine to patch ServerClaim")
 		go func() {
@@ -101,7 +135,7 @@ var _ = Describe("ListMachines", func() {
 				},
 			}
 			Eventually(Update(serverClaim, func() {
-				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo"}
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: server.Name}
 			})).Should(Succeed())
 		}()
 
@@ -126,7 +160,7 @@ var _ = Describe("ListMachines", func() {
 				},
 			}
 			Eventually(Update(serverClaim, func() {
-				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: "foo-2"}
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: server2.Name}
 			})).Should(Succeed())
 		}()
 
