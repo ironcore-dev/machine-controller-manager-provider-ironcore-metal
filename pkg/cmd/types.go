@@ -8,6 +8,7 @@ import "fmt"
 type NodeNamePolicy string
 
 const (
+	NodeNamePolicyBMCName         NodeNamePolicy = "BMCName"
 	NodeNamePolicyServerName      NodeNamePolicy = "ServerName"
 	NodeNamePolicyServerClaimName NodeNamePolicy = "ServerClaimName"
 )
@@ -24,10 +25,10 @@ func (n *NodeNamePolicy) Type() string {
 // Set validates and sets the NodeNamePolicy value
 func (n *NodeNamePolicy) Set(value string) error {
 	switch NodeNamePolicy(value) {
-	case NodeNamePolicyServerName, NodeNamePolicyServerClaimName:
+	case NodeNamePolicyBMCName, NodeNamePolicyServerName, NodeNamePolicyServerClaimName:
 		*n = NodeNamePolicy(value)
 		return nil
 	default:
-		return fmt.Errorf("invalid NodeNamePolicy value: %s (must be 'ServerName' or 'ServerClaimName')", value)
+		return fmt.Errorf("invalid NodeNamePolicy value: %s (must be '%s', '%s' or '%s')", value, NodeNamePolicyBMCName, NodeNamePolicyServerName, NodeNamePolicyServerClaimName)
 	}
 }

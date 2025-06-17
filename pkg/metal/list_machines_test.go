@@ -12,6 +12,7 @@ import (
 
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/metal/testing"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -19,7 +20,7 @@ import (
 )
 
 var _ = Describe("ListMachines", func() {
-	ns, providerSecret, drv := SetupTest("")
+	ns, providerSecret, drv := SetupTest(cmd.NodeNamePolicyServerClaimName)
 
 	It("should fail if no provider has been set", func(ctx SpecContext) {
 		By("ensuring an error if no provider has been set")

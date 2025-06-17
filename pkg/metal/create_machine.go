@@ -11,8 +11,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
-
 	"github.com/imdario/mergo"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -78,12 +76,11 @@ func (d *metalDriver) CreateMachine(ctx context.Context, req *driver.CreateMachi
 		return nil, err
 	}
 
-	nodeName := serverClaim.Name
-	if d.nodeNamePolicy == cmd.NodeNamePolicyServerName {
-		if serverClaim.Spec.ServerRef == nil {
-			return nil, status.Error(codes.Internal, "server claim does not have a server ref")
-		}
-		nodeName = serverClaim.Spec.ServerRef.Name
+	d.clientProvider.Lock()
+	nodeName, err := GetNodeName(ctx, d.nodeNamePolicy, serverClaim, d.metalNamespace, d.clientProvider.Client)
+	d.clientProvider.Unlock()
+	if err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get node name: %v", err))
 	}
 
 	if err := d.updateIgnitionAndPowerOnServer(ctx, req, serverClaim, providerSpec, addressesMetaData, nodeName); err != nil {
@@ -130,14 +127,17 @@ func (d *metalDriver) updateIgnitionAndPowerOnServer(ctx context.Context, req *d
 		return err
 	}
 
-	if err := d.clientProvider.Client.Patch(ctx, ignitionSecret, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
+	d.clientProvider.Lock()
+	defer d.clientProvider.Unlock()
+	metalClient := d.clientProvider.Client
+	if err := metalClient.Patch(ctx, ignitionSecret, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
 		return err
 	}
 
 	serverClaimBase := serverClaim.DeepCopy()
 	serverClaim.Spec.Power = metalv1alpha1.PowerOn
 
-	if err := d.clientProvider.Client.Patch(ctx, serverClaim, client.MergeFrom(serverClaimBase)); err != nil {
+	if err := metalClient.Patch(ctx, serverClaim, client.MergeFrom(serverClaimBase)); err != nil {
 		return err
 	}
 

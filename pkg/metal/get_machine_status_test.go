@@ -135,3 +135,75 @@ var _ = Describe("GetMachineStatus using Server names", func() {
 		}))
 	})
 })
+
+var _ = Describe("GetMachineStatus using BMC names", func() {
+	ns, providerSecret, drv := SetupTest(cmd.NodeNamePolicyBMCName)
+
+	It("should create a machine and ensure status", func(ctx SpecContext) {
+		By("creating a BMC")
+		machineName := "machine-0"
+		bmc := &metalv1alpha1.BMC{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "bmc-0",
+			},
+			Spec: metalv1alpha1.BMCSpec{
+				Endpoint: &metalv1alpha1.InlineEndpoint{
+					IP: metalv1alpha1.MustParseIP("127.0.0.1"),
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, bmc)).To(Succeed())
+		DeferCleanup(k8sClient.Delete, bmc)
+
+		By("creating a server")
+		server := &metalv1alpha1.Server{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-server",
+			},
+			Spec: metalv1alpha1.ServerSpec{
+				SystemUUID: "12345",
+				BMCRef: &corev1.LocalObjectReference{
+					Name: bmc.Name,
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, server)).To(Succeed())
+		DeferCleanup(k8sClient.Delete, server)
+
+		By("starting a non-blocking goroutine to patch ServerClaim")
+		go func() {
+			defer GinkgoRecover()
+			serverClaim := &metalv1alpha1.ServerClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: ns.Name,
+					Name:      machineName,
+				},
+			}
+			GinkgoWriter.Println("### Patching ServerClaim with ServerRef")
+			Eventually(Update(serverClaim, func() {
+				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: server.Name}
+			})).Should(Succeed())
+			GinkgoWriter.Println("### ServerClaim updated with ServerRef")
+		}()
+
+		By("creating machine")
+		Expect((*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
+			Machine:      newMachine(ns, "machine", -1, nil),
+			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
+			Secret:       providerSecret,
+		})).To(Equal(&driver.CreateMachineResponse{
+			ProviderID: fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0),
+			NodeName:   bmc.Name,
+		}))
+
+		By("ensuring the machine status")
+		Expect((*drv).GetMachineStatus(ctx, &driver.GetMachineStatusRequest{
+			Machine:      newMachine(ns, "machine", -1, nil),
+			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
+			Secret:       providerSecret,
+		})).To(Equal(&driver.GetMachineStatusResponse{
+			ProviderID: fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0),
+			NodeName:   bmc.Name,
+		}))
+	})
+})

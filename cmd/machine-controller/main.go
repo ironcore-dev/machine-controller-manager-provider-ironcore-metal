@@ -24,7 +24,7 @@ import (
 
 var (
 	KubeconfigPath string
-	nodeNamePolicy cmd.NodeNamePolicy
+	nodeNamePolicy cmd.NodeNamePolicy = cmd.NodeNamePolicyServerClaimName
 )
 
 func main() {
@@ -54,5 +54,5 @@ func main() {
 
 func AddExtraFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&KubeconfigPath, "metal-kubeconfig", "", "Path to the metal cluster kubeconfig.")
-	fs.Var(&nodeNamePolicy, "node-name-policy", "Define the node name policy. Possible values are 'ServerName' and 'ServerClaimName'.")
+	fs.Var(&nodeNamePolicy, "node-name-policy", fmt.Sprintf("Define the node name policy. Possible values are '%s', '%s' and '%s'.", cmd.NodeNamePolicyBMCName, cmd.NodeNamePolicyServerName, cmd.NodeNamePolicyServerClaimName))
 }
