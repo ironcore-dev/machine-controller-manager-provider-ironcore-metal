@@ -72,3 +72,9 @@ Following are the basic principles kept in mind while developing the external pl
         ```bash
         kubectl delete -f kubernetes/machine.yaml
         kubectl delete -f kubernetes/machine-deployment.yaml
+
+## Licensing
+
+Copyright 2025 SAP SE or an SAP affiliate company and IronCore contributors. Please see our [LICENSE](LICENSE) for
+copyright and license information. Detailed information including third-party components and their licensing/copyright
+information is available [via the REUSE tool](https://api.reuse.software/info/github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal).
