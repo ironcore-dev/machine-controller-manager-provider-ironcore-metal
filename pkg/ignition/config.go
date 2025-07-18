@@ -40,7 +40,7 @@ type Config struct {
 	DnsServers       []netip.Addr
 }
 
-func File(config *Config) (string, error) {
+func Render(config *Config) (string, error) {
 	ignitionBase := &map[string]interface{}{}
 	if err := yaml.Unmarshal([]byte(IgnitionTemplate), ignitionBase); err != nil {
 		return "", err
@@ -111,6 +111,7 @@ func File(config *Config) (string, error) {
 				}},
 			},
 		}
+
 		// merge metaData configuration with ignition content
 		if err := mergo.Merge(ignitionBase, metaDataConf, mergo.WithAppendSlice); err != nil {
 			return "", fmt.Errorf("failed to merge metaData configuration with ignition content: %w", err)
@@ -126,6 +127,7 @@ func File(config *Config) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed creating ignition file: %w", err)
 	}
+
 	buf := bytes.NewBufferString("")
 	err = tmpl.Execute(buf, config)
 	if err != nil {
@@ -139,6 +141,7 @@ func File(config *Config) (string, error) {
 
 	return ignition, nil
 }
+
 func renderButane(dataIn []byte) (string, error) {
 	// render by butane to json
 	options := common.TranslateBytesOptions{

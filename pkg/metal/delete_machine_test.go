@@ -21,9 +21,11 @@ import (
 
 var _ = Describe("DeleteMachine", func() {
 	ns, providerSecret, drv := SetupTest(cmd.NodeNamePolicyServerClaimName)
+	machineNamePrefix := "machine-delete"
 
 	It("should create and delete a machine", func(ctx SpecContext) {
-		machineName := "machine-0"
+		machineIndex := 1
+		machineName := fmt.Sprintf("%s-%d", machineNamePrefix, machineIndex)
 		By("creating a server")
 		server := &metalv1alpha1.Server{
 			ObjectMeta: metav1.ObjectMeta{
@@ -36,26 +38,13 @@ var _ = Describe("DeleteMachine", func() {
 		Expect(k8sClient.Create(ctx, server)).To(Succeed())
 		DeferCleanup(k8sClient.Delete, server)
 
-		go func() {
-			defer GinkgoRecover()
-			serverClaim := &metalv1alpha1.ServerClaim{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: ns.Name,
-					Name:      machineName,
-				},
-			}
-			Eventually(Update(serverClaim, func() {
-				serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: server.Name}
-			})).Should(Succeed())
-		}()
-
 		By("creating an metal machine")
 		Expect((*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
-			Machine:      newMachine(ns, "machine", -1, nil),
+			Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),
 			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
 			Secret:       providerSecret,
 		})).To(Equal(&driver.CreateMachineResponse{
-			ProviderID: fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0),
+			ProviderID: fmt.Sprintf("%s://%s/%s-%d", v1alpha1.ProviderName, ns.Name, machineNamePrefix, machineIndex),
 			NodeName:   machineName,
 		}))
 
@@ -75,7 +64,7 @@ var _ = Describe("DeleteMachine", func() {
 
 		By("ensuring that the machine can be deleted")
 		response, err := (*drv).DeleteMachine(ctx, &driver.DeleteMachineRequest{
-			Machine:      newMachine(ns, "machine", -1, nil),
+			Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),
 			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
 			Secret:       providerSecret,
 		})
@@ -90,7 +79,8 @@ var _ = Describe("DeleteMachine", func() {
 	})
 
 	It("should create and delete a machine ignition secret created with old naming convention", func(ctx SpecContext) {
-		machineName := "machine-0"
+		machineIndex := 2
+		machineName := fmt.Sprintf("%s-%d", machineNamePrefix, machineIndex)
 		By("creating a server")
 		server := &metalv1alpha1.Server{
 			ObjectMeta: metav1.ObjectMeta{
@@ -127,11 +117,11 @@ var _ = Describe("DeleteMachine", func() {
 
 		By("creating an metal machine")
 		Expect((*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
-			Machine:      newMachine(ns, "machine", -1, nil),
+			Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),
 			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
 			Secret:       providerSecret,
 		})).To(Equal(&driver.CreateMachineResponse{
-			ProviderID: fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0),
+			ProviderID: fmt.Sprintf("%s://%s/%s-%d", v1alpha1.ProviderName, ns.Name, machineNamePrefix, machineIndex),
 			NodeName:   machineName,
 		}))
 
@@ -144,7 +134,7 @@ var _ = Describe("DeleteMachine", func() {
 
 		By("ensuring that the machine can be deleted")
 		response, err := (*drv).DeleteMachine(ctx, &driver.DeleteMachineRequest{
-			Machine:      newMachine(ns, "machine", -1, nil),
+			Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),
 			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
 			Secret:       providerSecret,
 		})

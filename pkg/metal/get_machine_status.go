@@ -11,6 +11,7 @@ import (
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/codes"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/status"
 	apiv1alpha1 "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/validation"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
@@ -20,32 +21,40 @@ import (
 // GetMachineStatus handles a machine get status request
 func (d *metalDriver) GetMachineStatus(ctx context.Context, req *driver.GetMachineStatusRequest) (*driver.GetMachineStatusResponse, error) {
 	if isEmptyMachineStatusRequest(req) {
-		return nil, status.Error(codes.InvalidArgument, "received empty request")
-	}
-	if req.MachineClass.Provider != apiv1alpha1.ProviderName {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("requested provider '%s' is not supported by the driver '%s'", req.MachineClass.Provider, apiv1alpha1.ProviderName))
+		return nil, status.Error(codes.InvalidArgument, "received empty GetMachineStatusRequest")
 	}
 
-	klog.V(3).Infof("Machine status request has been received for %q", req.Machine.Name)
-	defer klog.V(3).Infof("Machine status request has been processed for %q", req.Machine.Name)
+	if req.MachineClass.Provider != apiv1alpha1.ProviderName {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("requested provider %q is not supported by the driver %q", req.MachineClass.Provider, apiv1alpha1.ProviderName))
+	}
+
+	klog.V(3).Infof("machine status request has been received for %q", req.Machine.Name)
+	defer klog.V(3).Infof("machine status request has been processed for %q", req.Machine.Name)
 
 	serverClaim := &metalv1alpha1.ServerClaim{}
 
-	d.clientProvider.Lock()
-	defer d.clientProvider.Unlock()
-	if err := d.clientProvider.Client.Get(ctx, client.ObjectKey{Namespace: d.metalNamespace, Name: req.Machine.Name}, serverClaim); err != nil {
+	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
+		return metalClient.Get(ctx, client.ObjectKey{Namespace: d.metalNamespace, Name: req.Machine.Name}, serverClaim)
+	}); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, status.Error(codes.NotFound, err.Error())
 		}
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	if serverClaim.Spec.Power != metalv1alpha1.PowerOn {
-		// workaround: NotFound/Unimplemented triggers machine create flow
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("server claim %q is not powered on", req.Machine.Name))
+	if len(serverClaim.Annotations) > 0 && serverClaim.Annotations[validation.AnnotationKeyMCMMachineRecreate] == "true" {
+		klog.V(3).Infof("machine creation flow will be retriggered, Server still not bound %q", req.Machine.Name)
+		// MCM provider retry with codes.NotFound which triggers machine create flow
+		return nil, status.Error(codes.NotFound, fmt.Sprintf("server claim %q is marked for recreation", req.Machine.Name))
 	}
 
-	nodeName, err := GetNodeName(ctx, d.nodeNamePolicy, serverClaim, d.metalNamespace, d.clientProvider.Client)
+	if serverClaim.Spec.Power != metalv1alpha1.PowerOn {
+		klog.V(3).Infof("machine initialization flow will be retriggered, Server still not powered on %q", req.Machine.Name)
+		// MCM provider retry with codes.Uninitialized which triggers machine initialization flow
+		return nil, status.Error(codes.Uninitialized, fmt.Sprintf("server claim %q is still not powered on, will reinitialize", req.Machine.Name))
+	}
+
+	nodeName, err := getNodeName(ctx, d.nodeNamePolicy, serverClaim, d.metalNamespace, d.clientProvider)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get node name: %v", err))
 	}

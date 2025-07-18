@@ -6,6 +6,7 @@ package metal
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -140,18 +141,17 @@ func SetupTest(nodeNamePolicy cmd.NodeNamePolicy) (*corev1.Namespace, *corev1.Se
 		}
 		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
-		drv = NewDriver(&mcmclient.Provider{Client: userClient}, ns.Name, nodeNamePolicy)
+		clientProvider := &mcmclient.Provider{}
+		clientProvider.SetClient(userClient)
+
+		drv = NewDriver(clientProvider, ns.Name, nodeNamePolicy)
 	})
 
 	return ns, secret, &drv
 }
 
 func newMachine(namespace *corev1.Namespace, prefix string, setMachineIndex int, annotations map[string]string) *gardenermachinev1alpha1.Machine {
-	index := 0
-
-	if setMachineIndex > 0 {
-		index = setMachineIndex
-	}
+	index := max(setMachineIndex, 0)
 
 	machine := &gardenermachinev1alpha1.Machine{
 		TypeMeta: metav1.TypeMeta{
@@ -177,9 +177,8 @@ func newMachine(namespace *corev1.Namespace, prefix string, setMachineIndex int,
 	machine.Spec.NodeTemplateSpec.Annotations = make(map[string]string)
 
 	//appending to already existing annotations
-	for k, v := range annotations {
-		machine.Spec.NodeTemplateSpec.Annotations[k] = v
-	}
+	maps.Copy(machine.Spec.NodeTemplateSpec.Annotations, annotations)
+
 	return machine
 }
 
@@ -199,16 +198,16 @@ func newMachineClass(providerName string, providerSpec map[string]interface{}) *
 	}
 }
 
-func newIPRef(machineName, ns, metadataKey string, providerSpec map[string]interface{}) (*capiv1beta1.IPAddress, *capiv1beta1.IPAddressClaim) {
+func newIPRef(machineName, ns, metadataKey string, providerSpec map[string]interface{}, address, gateway string) (*capiv1beta1.IPAddress, *capiv1beta1.IPAddressClaim) {
 	ipAddress := &capiv1beta1.IPAddress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-address", metadataKey),
 			Namespace: ns,
 		},
 		Spec: capiv1beta1.IPAddressSpec{
-			Address: "10.11.12.13",
+			Address: address,
 			Prefix:  24,
-			Gateway: "10.11.12.1",
+			Gateway: gateway,
 		},
 	}
 	ipAddressClaimName := fmt.Sprintf("%s-%s", machineName, metadataKey)
@@ -219,17 +218,18 @@ func newIPRef(machineName, ns, metadataKey string, providerSpec map[string]inter
 		},
 	}
 	if providerSpec != nil {
-		ipamConfig := map[string]interface{}{
-			"metadataKey": metadataKey,
-			"ipamRef": map[string]interface{}{
-				"name":     ipAddressClaimName,
-				"apiGroup": "ipam.cluster.x-k8s.io",
-				"kind":     "GlobalInClusterIPPool",
-			}}
+		ipamConfig := v1alpha1.IPAMConfig{
+			MetadataKey: metadataKey,
+			IPAMRef: &v1alpha1.IPAMObjectReference{
+				APIGroup: "ipam.cluster.x-k8s.io",
+				Kind:     "GlobalInClusterIPPool",
+				Name:     ipAddressClaimName,
+			},
+		}
 		if providerSpec["ipamConfig"] != nil {
-			providerSpec["ipamConfig"] = append(providerSpec["ipamConfig"].([]map[string]interface{}), ipamConfig)
+			providerSpec["ipamConfig"] = append(providerSpec["ipamConfig"].([]v1alpha1.IPAMConfig), ipamConfig)
 		} else {
-			providerSpec["ipamConfig"] = []map[string]interface{}{ipamConfig}
+			providerSpec["ipamConfig"] = []v1alpha1.IPAMConfig{ipamConfig}
 		}
 	}
 
