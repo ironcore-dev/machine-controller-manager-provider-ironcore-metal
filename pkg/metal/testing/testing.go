@@ -3,7 +3,9 @@
 
 package testing
 
-import "net"
+import (
+	"net"
+)
 
 var (
 	SampleProviderSpec = map[string]interface{}{

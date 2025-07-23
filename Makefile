@@ -76,7 +76,7 @@ run: fmt vet ## Run a machine controller from your host.
 
 .PHONY: docker-build
 docker-build: test ## Build docker image with the machine controller.
-	docker build -t ${CONTROLLER_IMG} .
+	docker build -t ${CONTROLLER_IMG} --build-arg TARGETOS=${TARGETOS} --build-arg TARGETARCH=${TARGETARCH} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the machine controller.

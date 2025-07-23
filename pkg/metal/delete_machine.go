@@ -24,10 +24,11 @@ import (
 // DeleteMachine handles a machine deletion request and also deletes ignitionSecret associated with it
 func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachineRequest) (*driver.DeleteMachineResponse, error) {
 	if isEmptyDeleteRequest(req) {
-		return nil, status.Error(codes.InvalidArgument, "received empty request")
+		return nil, status.Error(codes.InvalidArgument, "received empty DeleteMachineRequest")
 	}
+
 	if req.MachineClass.Provider != apiv1alpha1.ProviderName {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("requested provider '%s' is not supported by the driver '%s'", req.MachineClass.Provider, apiv1alpha1.ProviderName))
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("requested provider %q is not supported by the driver %q", req.MachineClass.Provider, apiv1alpha1.ProviderName))
 	}
 
 	klog.V(3).Infof("Machine deletion request has been received for %q", req.Machine.Name)
@@ -40,11 +41,9 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 		},
 	}
 
-	d.clientProvider.Lock()
-	metalClient := d.clientProvider.Client
-	defer d.clientProvider.Unlock()
-
-	if err := metalClient.Delete(ctx, ignitionSecret); client.IgnoreNotFound(err) != nil {
+	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
+		return metalClient.Delete(ctx, ignitionSecret)
+	}); client.IgnoreNotFound(err) != nil {
 		// Unknown leads to short retry in machine controller
 		return nil, status.Error(codes.Unknown, fmt.Sprintf("error deleting ignition secret: %s", err.Error()))
 	}
@@ -56,7 +55,9 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 		},
 	}
 
-	if err := metalClient.Delete(ctx, serverClaim); err != nil {
+	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
+		return metalClient.Delete(ctx, serverClaim)
+	}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			// Unknown leads to short retry in machine controller
 			return nil, status.Error(codes.Unknown, fmt.Sprintf("error deleting pod: %s", err.Error()))
@@ -68,7 +69,9 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 	// do so. If we would not wait until the server claim is gone it might happen that the kubelet could re-register the Node
 	// object even after it was already deleted by machine-controller-manager.
 	if err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
-		if err := metalClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim); err != nil {
+		if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
+			return metalClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim)
+		}); err != nil {
 			if apierrors.IsNotFound(err) {
 				return true, nil
 			}
@@ -77,10 +80,12 @@ func (d *metalDriver) DeleteMachine(ctx context.Context, req *driver.DeleteMachi
 		}
 		return false, nil
 	}); err != nil {
+		klog.V(3).Infof("Failed to wait for ServerClaim deletion: %v", err)
 		// will be retried with short retry by machine controller
 		return nil, status.Error(codes.DeadlineExceeded, err.Error())
 	}
 
+	klog.V(3).Infof("ServerClaim %q in namespace %q has been deleted", serverClaim.Name, serverClaim.Namespace)
 	return &driver.DeleteMachineResponse{}, nil
 }
 

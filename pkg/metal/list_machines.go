@@ -6,6 +6,7 @@ package metal
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/codes"
@@ -17,32 +18,32 @@ import (
 )
 
 func (d *metalDriver) ListMachines(ctx context.Context, req *driver.ListMachinesRequest) (*driver.ListMachinesResponse, error) {
+	if isEmptyListMachinesRequest(req) {
+		return nil, status.Error(codes.InvalidArgument, "received empty ListMachinesRequest")
+	}
+
 	if req.MachineClass.Provider != apiv1alpha1.ProviderName {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("requested provider '%s' is not supported by the driver '%s'", req.MachineClass.Provider, apiv1alpha1.ProviderName))
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("requested provider %q is not supported by the driver %q", req.MachineClass.Provider, apiv1alpha1.ProviderName))
 	}
 
 	klog.V(3).Infof("Machine list request has been received for %q", req.MachineClass.Name)
 	defer klog.V(3).Infof("Machine list request has been processed for %q", req.MachineClass.Name)
 
-	providerSpec, err := validateProviderSpecAndSecret(req.MachineClass, req.Secret)
+	providerSpec, err := GetProviderSpec(req.MachineClass, req.Secret)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("provider spec for requested provider '%s' is invalid: %v", req.MachineClass.Provider, err))
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get provider spec: %v", err))
 	}
 
-	// Get a server claim list
 	serverClaimList := &metalv1alpha1.ServerClaimList{}
 	matchingLabels := client.MatchingLabels{}
-	for k, v := range providerSpec.Labels {
-		matchingLabels[k] = v
-	}
+	maps.Copy(matchingLabels, providerSpec.Labels)
 
-	d.clientProvider.Lock()
-	defer d.clientProvider.Unlock()
-	if err := d.clientProvider.Client.List(ctx, serverClaimList, client.InNamespace(d.metalNamespace), matchingLabels); err != nil {
+	if err = d.clientProvider.SyncClient(func(metalClient client.Client) error {
+		return metalClient.List(ctx, serverClaimList, client.InNamespace(d.metalNamespace), matchingLabels)
+	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	// Creating machineList from server claim list items
 	machineList := make(map[string]string, len(serverClaimList.Items))
 	for _, machine := range serverClaimList.Items {
 		machineID := getProviderIDForServerClaim(&machine)
@@ -50,4 +51,8 @@ func (d *metalDriver) ListMachines(ctx context.Context, req *driver.ListMachines
 	}
 
 	return &driver.ListMachinesResponse{MachineList: machineList}, nil
+}
+
+func isEmptyListMachinesRequest(req *driver.ListMachinesRequest) bool {
+	return req == nil || req.MachineClass == nil || req.Secret == nil
 }

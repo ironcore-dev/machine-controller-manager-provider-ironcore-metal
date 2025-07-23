@@ -33,4 +33,6 @@ WORKDIR /
 COPY --from=builder /workspace/machine-controller .
 USER 65532:65532
 
+LABEL source_repository="https://github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal"
+
 ENTRYPOINT ["/machine-controller"]
