@@ -259,7 +259,7 @@ var _ = Describe("CreateMachine with Server name as hostname", func() {
 			})).Should(Succeed())
 		}()
 
-		By("ensuring that a server claim did not have recreate annotation after successful creation")
+		By("ensuring that a ServerClaim did not have recreate annotation after successful creation")
 		Eventually(func(g Gomega) {
 			createMachineResponse, err := (*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
 				Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),
@@ -354,7 +354,7 @@ var _ = Describe("CreateMachine using BMC names", func() {
 			})).Should(Succeed())
 		}()
 
-		By("ensuring that a server claim did not have recreate annotation after successful creation")
+		By("ensuring that a ServerClaim did not have recreate annotation after successful creation")
 		Eventually(func(g Gomega) {
 			createMachineResponse, err := (*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
 				Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),

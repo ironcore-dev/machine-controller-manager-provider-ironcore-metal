@@ -182,7 +182,7 @@ func newMachine(namespace *corev1.Namespace, prefix string, setMachineIndex int,
 	return machine
 }
 
-func newMachineClass(providerName string, providerSpec map[string]interface{}) *gardenermachinev1alpha1.MachineClass {
+func newMachineClass(providerName string, providerSpec map[string]any) *gardenermachinev1alpha1.MachineClass {
 	providerSpecJSON, err := json.Marshal(providerSpec)
 	Expect(err).ShouldNot(HaveOccurred())
 	return &gardenermachinev1alpha1.MachineClass{
@@ -198,7 +198,7 @@ func newMachineClass(providerName string, providerSpec map[string]interface{}) *
 	}
 }
 
-func newIPRef(machineName, ns, metadataKey string, providerSpec map[string]interface{}, address, gateway string) (*capiv1beta1.IPAddress, *capiv1beta1.IPAddressClaim) {
+func newIPRef(machineName, ns, metadataKey string, providerSpec map[string]any, address, gateway string) (*capiv1beta1.IPAddress, *capiv1beta1.IPAddressClaim) {
 	ipAddress := &capiv1beta1.IPAddress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-address", metadataKey),

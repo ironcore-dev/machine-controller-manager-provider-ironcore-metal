@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	SampleProviderSpec = map[string]interface{}{
+	SampleProviderSpec = map[string]any{
 		"labels": map[string]string{
 			"shoot-name":      "my-shoot",
 			"shoot-namespace": "my-shoot-namespace",
@@ -39,50 +39,50 @@ var (
 		},
 	}
 
-	SampleIgnition = map[string]interface{}{
-		"ignition": map[string]interface{}{
+	SampleIgnition = map[string]any{
+		"ignition": map[string]any{
 			"version": "3.2.0",
 		},
-		"passwd": map[string]interface{}{
-			"users": []interface{}{
-				map[string]interface{}{
-					"groups": []interface{}{"group1"},
+		"passwd": map[string]any{
+			"users": []any{
+				map[string]any{
+					"groups": []any{"group1"},
 					"name":   "xyz",
 					"shell":  "/bin/bash",
 				},
 			},
 		},
-		"storage": map[string]interface{}{
-			"files": []interface{}{
-				map[string]interface{}{
+		"storage": map[string]any{
+			"files": []any{
+				map[string]any{
 					"overwrite": true,
 					"path":      "/etc/hostname",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"compression": "",
 						"source":      "data:,machine-0%0A",
 					},
 					"mode": 420.0,
 				},
-				map[string]interface{}{
+				map[string]any{
 					"overwrite": true,
 					"path":      "/var/lib/metal-cloud-config/init.sh",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"source":      "data:,abcd%0A",
 						"compression": "",
 					},
 					"mode": 493.0,
 				},
-				map[string]interface{}{
+				map[string]any{
 					"path": "/etc/systemd/resolved.conf.d/dns.conf",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"compression": "",
 						"source":      "data:,%5BResolve%5D%0ADNS%3D1.2.3.4%0ADNS%3D5.6.7.8",
 					},
 					"mode": 420.0,
 				},
-				map[string]interface{}{
+				map[string]any{
 					"path": "/var/lib/metal-cloud-config/metadata",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"compression": "",
 						"source":      "data:;base64,eyJiYXoiOiIxMDAiLCJmb28iOiJiYXIifQ==",
 					},
@@ -90,9 +90,9 @@ var (
 				},
 			},
 		},
-		"systemd": map[string]interface{}{
-			"units": []interface{}{
-				map[string]interface{}{
+		"systemd": map[string]any{
+			"units": []any{
+				map[string]any{
 					"contents": `[Unit]
 Wants=network-online.target
 After=network-online.target
@@ -115,50 +115,50 @@ WantedBy=multi-user.target
 		},
 	}
 
-	SampleIgnitionWithServerMetadata = map[string]interface{}{
-		"ignition": map[string]interface{}{
+	SampleIgnitionWithServerMetadata = map[string]any{
+		"ignition": map[string]any{
 			"version": "3.2.0",
 		},
-		"passwd": map[string]interface{}{
-			"users": []interface{}{
-				map[string]interface{}{
-					"groups": []interface{}{"group1"},
+		"passwd": map[string]any{
+			"users": []any{
+				map[string]any{
+					"groups": []any{"group1"},
 					"name":   "xyz",
 					"shell":  "/bin/bash",
 				},
 			},
 		},
-		"storage": map[string]interface{}{
-			"files": []interface{}{
-				map[string]interface{}{
+		"storage": map[string]any{
+			"files": []any{
+				map[string]any{
 					"overwrite": true,
 					"path":      "/etc/hostname",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"compression": "",
 						"source":      "data:,machine-0%0A",
 					},
 					"mode": 420.0,
 				},
-				map[string]interface{}{
+				map[string]any{
 					"overwrite": true,
 					"path":      "/var/lib/metal-cloud-config/init.sh",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"source":      "data:,abcd%0A",
 						"compression": "",
 					},
 					"mode": 493.0,
 				},
-				map[string]interface{}{
+				map[string]any{
 					"path": "/etc/systemd/resolved.conf.d/dns.conf",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"compression": "",
 						"source":      "data:,%5BResolve%5D%0ADNS%3D1.2.3.4%0ADNS%3D5.6.7.8",
 					},
 					"mode": 420.0,
 				},
-				map[string]interface{}{
+				map[string]any{
 					"path": "/var/lib/metal-cloud-config/metadata",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"compression": "",
 						"source":      "data:;base64,eyJiYXoiOiIxMDAiLCJmb28iOiJiYXIiLCJsb29wYmFja0FkZHJlc3MiOiIyMDAxOmRiODo6MSJ9",
 					},
@@ -166,9 +166,9 @@ WantedBy=multi-user.target
 				},
 			},
 		},
-		"systemd": map[string]interface{}{
-			"units": []interface{}{
-				map[string]interface{}{
+		"systemd": map[string]any{
+			"units": []any{
+				map[string]any{
 					"contents": `[Unit]
 Wants=network-online.target
 After=network-online.target
@@ -191,50 +191,50 @@ WantedBy=multi-user.target
 		},
 	}
 
-	SampleIgnitionWithTestServerHostname = map[string]interface{}{
-		"ignition": map[string]interface{}{
+	SampleIgnitionWithTestServerHostname = map[string]any{
+		"ignition": map[string]any{
 			"version": "3.2.0",
 		},
-		"passwd": map[string]interface{}{
-			"users": []interface{}{
-				map[string]interface{}{
-					"groups": []interface{}{"group1"},
+		"passwd": map[string]any{
+			"users": []any{
+				map[string]any{
+					"groups": []any{"group1"},
 					"name":   "xyz",
 					"shell":  "/bin/bash",
 				},
 			},
 		},
-		"storage": map[string]interface{}{
-			"files": []interface{}{
-				map[string]interface{}{
+		"storage": map[string]any{
+			"files": []any{
+				map[string]any{
 					"overwrite": true,
 					"path":      "/etc/hostname",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"compression": "",
 						"source":      "data:,test-server%0A",
 					},
 					"mode": 420.0,
 				},
-				map[string]interface{}{
+				map[string]any{
 					"overwrite": true,
 					"path":      "/var/lib/metal-cloud-config/init.sh",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"source":      "data:,abcd%0A",
 						"compression": "",
 					},
 					"mode": 493.0,
 				},
-				map[string]interface{}{
+				map[string]any{
 					"path": "/etc/systemd/resolved.conf.d/dns.conf",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"compression": "",
 						"source":      "data:,%5BResolve%5D%0ADNS%3D1.2.3.4%0ADNS%3D5.6.7.8",
 					},
 					"mode": 420.0,
 				},
-				map[string]interface{}{
+				map[string]any{
 					"path": "/var/lib/metal-cloud-config/metadata",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"compression": "",
 						"source":      "data:;base64,eyJiYXoiOiIxMDAiLCJmb28iOiJiYXIifQ==",
 					},
@@ -242,9 +242,9 @@ WantedBy=multi-user.target
 				},
 			},
 		},
-		"systemd": map[string]interface{}{
-			"units": []interface{}{
-				map[string]interface{}{
+		"systemd": map[string]any{
+			"units": []any{
+				map[string]any{
 					"contents": `[Unit]
 Wants=network-online.target
 After=network-online.target

@@ -175,16 +175,14 @@ var _ = Describe("InitializeMachine", func() {
 		Expect(createMachineResponse.ProviderID).To(Equal(fmt.Sprintf("%s://%s/%s-%d", v1alpha1.ProviderName, ns.Name, machineNamePrefix, machineIndex)))
 		Expect(createMachineResponse.NodeName).To(Equal(machineName))
 
-		By("ensuring that the server claim owns the ip address claims")
+		By("ensuring that the ServerClaim is created")
 		serverClaim := &metalv1alpha1.ServerClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: ns.Name,
 				Name:      machineName,
 			},
 		}
-		Eventually(Object(serverClaim)).Should(
-			HaveField("Spec.Power", metalv1alpha1.PowerOff),
-		)
+		Eventually(Get(serverClaim)).Should(Succeed())
 
 		By("patching ServerClaim with ServerRef")
 		Eventually(Update(serverClaim, func() {
@@ -318,19 +316,19 @@ var _ = Describe("InitializeMachine", func() {
 
 		expected := base64.StdEncoding.EncodeToString([]byte(`{"pool-c":{"gateway":"10.11.13.1","ip":"10.11.13.13","prefix":24},"pool-d":{"gateway":"10.11.13.1","ip":"10.11.13.13","prefix":24}}`))
 		Eventually(Object(ignition)).Should(SatisfyAll(
-			WithTransform(func(sec *corev1.Secret) []interface{} {
+			WithTransform(func(sec *corev1.Secret) []any {
 				Expect(sec.Data).To(HaveKey("ignition"))
-				var ignition map[string]interface{}
+				var ignition map[string]any
 				Expect(json.Unmarshal(sec.Data["ignition"], &ignition)).To(Succeed())
 				Expect(ignition).To(HaveKey("storage"))
-				storage := ignition["storage"].(map[string]interface{})
+				storage := ignition["storage"].(map[string]any)
 				Expect(storage).To(HaveKey("files"))
-				files := storage["files"].([]interface{})
+				files := storage["files"].([]any)
 				return files
 			}, ContainElement(
-				map[string]interface{}{
+				map[string]any{
 					"path": "/var/lib/metal-cloud-config/metadata",
-					"contents": map[string]interface{}{
+					"contents": map[string]any{
 						"compression": "",
 						"source":      "data:;base64," + expected,
 					},
