@@ -12,7 +12,7 @@ require (
 	github.com/ironcore-dev/metal-operator v0.0.0-20250708150428-7578aedfe2ff
 	github.com/onsi/ginkgo/v2 v2.25.3
 	github.com/onsi/gomega v1.38.2
-	github.com/spf13/pflag v1.0.7
+	github.com/spf13/pflag v1.0.10
 	k8s.io/api v0.33.3
 	k8s.io/apimachinery v0.33.3
 	k8s.io/client-go v0.33.3
