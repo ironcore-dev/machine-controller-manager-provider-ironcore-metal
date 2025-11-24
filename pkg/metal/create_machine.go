@@ -7,23 +7,15 @@ import (
 	"context"
 	"fmt"
 
-	apiv1alpha1 "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
-	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/validation"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
-
-	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/codes"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/status"
 	apiv1alpha1 "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/validation"
-	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/ignition"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -41,19 +33,19 @@ func (d *metalDriver) CreateMachine(ctx context.Context, req *driver.CreateMachi
 	klog.V(3).Info("Machine creation request has been received", "name", req.Machine.Name)
 	defer klog.V(3).Info("Machine creation request has been processed", "name", req.Machine.Name)
 
-	providerSpec, err := GetProviderSpec(req.MachineClass, req.Secret)
+	providerSpec, err := getProviderSpecForMachineClass(req.MachineClass, req.Secret)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get provider spec: %v", err))
 	}
 
-	serverClaim, err := d.createServerClaim(ctx, req, providerSpec)
+	serverClaim, err := d.generateAndApplyServerClaim(ctx, req, providerSpec)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to create ServerClaim: %v", err))
 	}
 
 	// we need the server to be bound if not the ServerClaimName policy in order to get the node name
 	if d.nodeNamePolicy != cmd.NodeNamePolicyServerClaimName {
-		serverBound, err := d.ServerIsBound(ctx, serverClaim)
+		serverBound, err := d.IsServerBound(ctx, serverClaim)
 		if err != nil {
 			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to check if server is bound: %v", err))
 		}
@@ -95,8 +87,8 @@ func isEmptyCreateRequest(req *driver.CreateMachineRequest) bool {
 	return req == nil || req.MachineClass == nil || req.Machine == nil || req.Secret == nil
 }
 
-// createServerClaim creates and applies a ServerClaim object with proper ignition data
-func (d *metalDriver) createServerClaim(ctx context.Context, req *driver.CreateMachineRequest, providerSpec *apiv1alpha1.ProviderSpec) (*metalv1alpha1.ServerClaim, error) {
+// generateAndApplyServerClaim creates and applies a ServerClaim object with proper ignition data
+func (d *metalDriver) generateAndApplyServerClaim(ctx context.Context, req *driver.CreateMachineRequest, providerSpec *apiv1alpha1.ProviderSpec) (*metalv1alpha1.ServerClaim, error) {
 	klog.V(3).Info("Creating ServerClaim", "name", req.Machine.Name, "namespace", d.metalNamespace)
 
 	serverClaim := &metalv1alpha1.ServerClaim{
@@ -149,38 +141,4 @@ func (d *metalDriver) patchServerClaimWithRecreateAnnotation(ctx context.Context
 	}
 
 	return nil
-}
-
-// ServerIsBound checks if the server is already bound
-func (d *metalDriver) ServerIsBound(ctx context.Context, serverClaim *metalv1alpha1.ServerClaim) (bool, error) {
-	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
-		return metalClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim)
-	}); err != nil {
-		return false, fmt.Errorf("failed to get ServerClaim %q: %v", serverClaim.Name, err)
-	}
-
-	return serverClaim.Spec.ServerRef != nil, nil
-}
-
-func (d *metalDriver) nodeExistsByName(ctx context.Context, nodeName string) bool {
-	nodeFound := false
-
-	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
-		nodeList := &corev1.NodeList{}
-		err := metalClient.List(ctx, nodeList)
-		if err != nil {
-			return err
-		}
-		for _, node := range nodeList.Items {
-			if node.Name == nodeName {
-				nodeFound = true
-				break
-			}
-		}
-		return nil
-	}); err != nil {
-		klog.V(3).Info("Failed to list nodes", "error", err)
-	}
-
-	return nodeFound
 }

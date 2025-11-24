@@ -9,6 +9,7 @@ import (
 
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/metal/testing"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
@@ -19,7 +20,7 @@ import (
 )
 
 var _ = Describe("UpdateMachine", func() {
-	ns, providerSecret, drv := SetupTest()
+	ns, providerSecret, drv := SetupTest(cmd.NodeNamePolicyServerClaimName)
 
 	var server *metalv1alpha1.Server
 
@@ -65,6 +66,27 @@ var _ = Describe("UpdateMachine", func() {
 				Namespace: ns.Name,
 			},
 		}
+
+		By("ensuring that the ServerClaim is bound")
+		Eventually(Update(server, func() {
+			server.Spec.ServerClaimRef = &corev1.ObjectReference{Namespace: serverClaim.Namespace, Name: server.Name}
+		}))
+		Eventually(Update(serverClaim, func() {
+			serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: server.Name}
+		})).Should(Succeed())
+		Eventually(UpdateStatus(serverClaim, func() {
+			serverClaim.Status.Phase = metalv1alpha1.PhaseBound
+		})).Should(Succeed())
+
+		By("ensuring that the node has been initialized")
+		Expect((*drv).InitializeMachine(ctx, &driver.InitializeMachineRequest{
+			Machine:      newMachine(ns, "machine", -1, nil),
+			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
+			Secret:       providerSecret,
+		})).To(Equal(&driver.InitializeMachineResponse{
+			ProviderID: fmt.Sprintf("%s://%s/machine-%d", v1alpha1.ProviderName, ns.Name, 0),
+			NodeName:   machineName,
+		}))
 
 		Eventually(Object(serverClaim)).Should(SatisfyAll(
 			HaveField("ObjectMeta.Labels", map[string]string{

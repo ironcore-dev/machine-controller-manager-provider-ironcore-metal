@@ -11,7 +11,10 @@ import (
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/codes"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/status"
 	apiv1alpha1 "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func (d *metalDriver) UpdateMachine(ctx context.Context, req *driver.UpdateMachineRequest) (*driver.UpdateMachineResponse, error) {
@@ -26,31 +29,63 @@ func (d *metalDriver) UpdateMachine(ctx context.Context, req *driver.UpdateMachi
 	klog.V(3).Infof("Machine update request has been received for %q", req.Machine.Name)
 	defer klog.V(3).Infof("Machine update request has been processed for %q", req.Machine.Name)
 
-	providerSpec, err := validateProviderSpecAndSecret(req.MachineClass, req.Secret)
+	providerSpec, err := getProviderSpecForMachineClass(req.MachineClass, req.Secret)
 	if err != nil {
 		return nil, err
 	}
 
-	addressClaims, addressesMetaData, err := d.getOrCreateIPAddressClaims(ctx, req.Machine, providerSpec)
+	serverClaim, err := d.getServerClaimForMachine(ctx, req.Machine)
 	if err != nil {
 		return nil, err
 	}
 
-	ignitionSecret, err := d.generateIgnitionSecret(ctx, req.Machine, req.Secret, providerSpec, addressesMetaData)
+	nodeName, err := getNodeName(ctx, d.nodeNamePolicy, serverClaim, d.metalNamespace, d.clientProvider)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node name: %w", err)
+	}
+
+	addressesMetaData, err := d.collectIPAddressClaimsMetadata(ctx, req.Machine, providerSpec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to collect addresses: %w", err)
+	}
+
+	serverMetadata, err := d.extractServerMetadataFromClaim(ctx, serverClaim)
+	if err != nil {
+		return nil, fmt.Errorf("error extracting server metadata from ServerClaim %q: %w", client.ObjectKeyFromObject(serverClaim), err)
+	}
+
+	ignitionSecret, err := d.generateIgnitionSecret(ctx, req.Machine, req.MachineClass, req.Secret, nodeName, providerSpec, addressesMetaData, serverMetadata)
 	if err != nil {
 		return nil, err
 	}
 
-	serverClaim, err := d.applyServerClaim(ctx, req.Machine, providerSpec, ignitionSecret)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := d.setServerClaimOwnership(ctx, serverClaim, addressClaims); err != nil {
+	if err := d.applyIgnitionAndRestartServer(ctx, ignitionSecret, serverClaim, providerSpec); err != nil {
 		return nil, err
 	}
 
 	return &driver.UpdateMachineResponse{}, nil
+}
+
+func (d *metalDriver) applyIgnitionAndRestartServer(ctx context.Context, secret *corev1.Secret, claim *metalv1alpha1.ServerClaim, providerSpec *apiv1alpha1.ProviderSpec) error {
+	claimBase := claim.DeepCopy()
+	claim.Annotations = map[string]string{
+		metalv1alpha1.OperationAnnotation: metalv1alpha1.GracefulRestartServerPower,
+	}
+	claim.Spec.Image = providerSpec.Image
+
+	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
+		return metalClient.Patch(ctx, claim, client.MergeFrom(claimBase))
+	}); err != nil {
+		return fmt.Errorf("failed to apply ServerClaim: %w", err)
+	}
+
+	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
+		return metalClient.Patch(ctx, secret, client.Apply, fieldOwner, client.ForceOwnership)
+	}); err != nil {
+		return fmt.Errorf("failed to apply Ignition secret: %w", err)
+	}
+
+	return nil
 }
 
 func isEmptyUpdateRequest(req *driver.UpdateMachineRequest) bool {
