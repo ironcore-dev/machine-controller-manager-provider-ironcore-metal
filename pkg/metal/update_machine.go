@@ -75,9 +75,6 @@ func (d *metalDriver) UpdateMachine(ctx context.Context, req *driver.UpdateMachi
 
 func (d *metalDriver) applyIgnitionAndRestartServer(ctx context.Context, secret *corev1.Secret, claim *metalv1alpha1.ServerClaim, providerSpec *apiv1alpha1.ProviderSpec) error {
 	claimBase := claim.DeepCopy()
-	claim.Annotations = map[string]string{
-		metalv1alpha1.OperationAnnotation: metalv1alpha1.GracefulRestartServerPower,
-	}
 	klog.V(3).Infof("Updating image from %s to %s", claim.Spec.Image, providerSpec.Image)
 	claim.Spec.Image = providerSpec.Image
 
