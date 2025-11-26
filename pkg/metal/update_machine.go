@@ -33,35 +33,42 @@ func (d *metalDriver) UpdateMachine(ctx context.Context, req *driver.UpdateMachi
 	if err != nil {
 		return nil, err
 	}
+	klog.V(3).Infof("Generated provider spec for machine %q", req.Machine.Name)
 
 	serverClaim, err := d.getServerClaimForMachine(ctx, req.Machine)
 	if err != nil {
 		return nil, err
 	}
+	klog.V(3).Infof("Got server claim for machine %q", req.Machine.Name)
 
 	nodeName, err := getNodeName(ctx, d.nodeNamePolicy, serverClaim, d.metalNamespace, d.clientProvider)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get node name: %w", err)
 	}
+	klog.V(3).Infof("Got node name %s for machine %q", nodeName, req.Machine.Name)
 
 	addressesMetaData, err := d.collectIPAddressClaimsMetadata(ctx, req.Machine, providerSpec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect addresses: %w", err)
 	}
+	klog.V(3).Infof("Got addresses meta data for machine %q", req.Machine.Name)
 
 	serverMetadata, err := d.extractServerMetadataFromClaim(ctx, serverClaim)
 	if err != nil {
 		return nil, fmt.Errorf("error extracting server metadata from ServerClaim %q: %w", client.ObjectKeyFromObject(serverClaim), err)
 	}
+	klog.V(3).Infof("Got server metadata for machine %q", req.Machine.Name)
 
 	ignitionSecret, err := d.generateIgnitionSecret(ctx, req.Machine, req.MachineClass, req.Secret, nodeName, providerSpec, addressesMetaData, serverMetadata)
 	if err != nil {
 		return nil, err
 	}
+	klog.V(3).Infof("Generated ignition secret for machine %q", req.Machine.Name)
 
 	if err := d.applyIgnitionAndRestartServer(ctx, ignitionSecret, serverClaim, providerSpec); err != nil {
 		return nil, err
 	}
+	klog.V(3).Infof("Applying server claim for machine %q", req.Machine.Name)
 
 	return &driver.UpdateMachineResponse{}, nil
 }
