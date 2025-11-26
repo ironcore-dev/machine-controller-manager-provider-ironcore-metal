@@ -68,7 +68,7 @@ func (d *metalDriver) UpdateMachine(ctx context.Context, req *driver.UpdateMachi
 	if err := d.applyIgnitionAndRestartServer(ctx, ignitionSecret, serverClaim, providerSpec); err != nil {
 		return nil, err
 	}
-	klog.V(3).Infof("Applying server claim for machine %q", req.Machine.Name)
+	klog.V(3).Infof("Applied server claim for machine %q", req.Machine.Name)
 
 	return &driver.UpdateMachineResponse{}, nil
 }
@@ -78,18 +78,19 @@ func (d *metalDriver) applyIgnitionAndRestartServer(ctx context.Context, secret 
 	claim.Annotations = map[string]string{
 		metalv1alpha1.OperationAnnotation: metalv1alpha1.GracefulRestartServerPower,
 	}
+	klog.V(3).Infof("Updating image from %s to %s", claim.Spec.Image, providerSpec.Image)
 	claim.Spec.Image = providerSpec.Image
-
-	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
-		return metalClient.Patch(ctx, claim, client.MergeFrom(claimBase))
-	}); err != nil {
-		return fmt.Errorf("failed to apply ServerClaim: %w", err)
-	}
 
 	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
 		return metalClient.Patch(ctx, secret, client.Apply, fieldOwner, client.ForceOwnership)
 	}); err != nil {
 		return fmt.Errorf("failed to apply Ignition secret: %w", err)
+	}
+
+	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
+		return metalClient.Patch(ctx, claim, client.MergeFrom(claimBase))
+	}); err != nil {
+		return fmt.Errorf("failed to apply ServerClaim: %w", err)
 	}
 
 	return nil
