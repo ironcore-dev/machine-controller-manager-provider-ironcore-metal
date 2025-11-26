@@ -8,16 +8,14 @@ import (
 	"fmt"
 	"net"
 
+	machinev1alpha1 "github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	apiv1alpha1 "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/validation"
-	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/ignition"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/codes"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/machinecodes/status"
-
-	"github.com/imdario/mergo"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,30 +39,30 @@ func (d *metalDriver) InitializeMachine(ctx context.Context, req *driver.Initial
 	klog.V(3).Info("Machine initialization request has been received", "name", req.Machine.Name)
 	defer klog.V(3).Info("Machine initialization request has been processed", "name", req.Machine.Name)
 
-	providerSpec, err := GetProviderSpec(req.MachineClass, req.Secret)
+	providerSpec, err := getProviderSpecForMachineClass(req.MachineClass, req.Secret)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get provider spec: %v", err))
 	}
 
-	serverClaim, err := d.getServerClaim(ctx, req)
+	serverClaim, err := d.getServerClaimForMachine(ctx, req.Machine)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get ServerClaim: %v", err))
 	}
 
 	if serverClaim.Spec.ServerRef == nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("ServerClaim %s/%s still not bound", d.metalNamespace, req.Machine.Name))
+		return nil, status.Error(codes.Internal, fmt.Sprintf("ServerClaim %s/%s not bound", d.metalNamespace, req.Machine.Name))
 	}
 
 	if err := d.createIPAddressClaims(ctx, req, serverClaim, providerSpec); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to create IPAddressClaims: %v", err))
 	}
 
-	addressesMetaData, err := d.collectIPAddressClaimsMetadata(ctx, req, providerSpec)
+	addressesMetaData, err := d.collectIPAddressClaimsMetadata(ctx, req.Machine, providerSpec)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to collect IPAddress metadata: %v", err))
 	}
 
-	if err := d.createIgnitionAndPowerOnServer(ctx, req, serverClaim, providerSpec, addressesMetaData); err != nil {
+	if err := d.applyIgnitionAndPowerOnServer(ctx, req, serverClaim, providerSpec, addressesMetaData); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to update ignition and power on server: %v", err))
 	}
 
@@ -131,13 +129,17 @@ func (d *metalDriver) createIPAddressClaims(ctx context.Context, req *driver.Ini
 }
 
 // collectIPAddressClaimsMetadata collects the IPAddressClaims metadata for the machine
-func (d *metalDriver) collectIPAddressClaimsMetadata(ctx context.Context, req *driver.InitializeMachineRequest, providerSpec *apiv1alpha1.ProviderSpec) (map[string]any, error) {
-	klog.V(3).Info("Collecting IPAddressClaims metadata for machine", "name", req.Machine.Name, "namespace", d.metalNamespace)
+func (d *metalDriver) collectIPAddressClaimsMetadata(ctx context.Context, machine *machinev1alpha1.Machine, providerSpec *apiv1alpha1.ProviderSpec) (map[string]any, error) {
+	if machine == nil {
+		return nil, fmt.Errorf("machine is nil")
+	}
+
+	klog.V(3).Info("Collecting IPAddressClaims metadata for Machine", "Machine", client.ObjectKeyFromObject(machine))
 
 	addressesMetaData := make(map[string]any)
 
 	for _, ipamConfig := range providerSpec.IPAMConfig {
-		ipAddrClaimName := getIPAddressClaimName(req.Machine.Name, ipamConfig.MetadataKey)
+		ipAddrClaimName := getIPAddressClaimName(machine.Name, ipamConfig.MetadataKey)
 		ipClaim := &capiv1beta1.IPAddressClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ipAddrClaimName,
@@ -181,66 +183,8 @@ func (d *metalDriver) collectIPAddressClaimsMetadata(ctx context.Context, req *d
 	return addressesMetaData, nil
 }
 
-// generateIgnition creates an ignition file for the machine and stores it in a secret
-func (d *metalDriver) generateIgnitionSecret(ctx context.Context, req *driver.InitializeMachineRequest, hostname string, providerSpec *apiv1alpha1.ProviderSpec, addressesMetaData map[string]any, serverMetadata *ServerMetadata) (*corev1.Secret, error) {
-	klog.V(3).Info("Generating ignition secret for machine", "name", req.Machine.Name)
-
-	userData, ok := req.Secret.Data["userData"]
-	if !ok {
-		return nil, fmt.Errorf("failed to find user-data in Secret %q", client.ObjectKeyFromObject(req.Secret))
-	}
-
-	if providerSpec.Metadata == nil {
-		providerSpec.Metadata = make(map[string]any)
-	}
-
-	if serverMetadata != nil {
-		metadata := map[string]any{}
-		if serverMetadata.LoopbackAddress != nil {
-			metadata["loopbackAddress"] = serverMetadata.LoopbackAddress.String()
-		}
-		if err := mergo.Merge(&providerSpec.Metadata, metadata, mergo.WithOverride); err != nil {
-			return nil, fmt.Errorf("failed to merge server metadata into provider metadata: %w", err)
-		}
-	}
-
-	if err := mergo.Merge(&providerSpec.Metadata, addressesMetaData, mergo.WithOverride); err != nil {
-		return nil, fmt.Errorf("failed to merge addresses metadata into provider metadata: %w", err)
-	}
-
-	config := &ignition.Config{
-		Hostname:         hostname,
-		UserData:         string(userData),
-		MetaData:         providerSpec.Metadata,
-		Ignition:         providerSpec.Ignition,
-		DnsServers:       providerSpec.DnsServers,
-		IgnitionOverride: providerSpec.IgnitionOverride,
-	}
-
-	ignitionContent, err := ignition.Render(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to render ignition for Machine %q: %w", client.ObjectKeyFromObject(req.Machine), err)
-	}
-
-	ignitionData := map[string][]byte{}
-	ignitionData["ignition"] = []byte(ignitionContent)
-	ignitionSecret := &corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: corev1.SchemeGroupVersion.String(),
-			Kind:       "Secret",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      d.getIgnitionNameForMachine(ctx, req.Machine.Name),
-			Namespace: d.metalNamespace,
-		},
-		Data: ignitionData,
-	}
-
-	return ignitionSecret, nil
-}
-
-// createIgnitionAndPowerOnServer creates the ignition secret for the server and powers it on
-func (d *metalDriver) createIgnitionAndPowerOnServer(ctx context.Context, req *driver.InitializeMachineRequest, serverClaim *metalv1alpha1.ServerClaim, providerSpec *apiv1alpha1.ProviderSpec, addressesMetaData map[string]any) error {
+// applyIgnitionAndPowerOnServer creates the ignition secret for the server and powers it on
+func (d *metalDriver) applyIgnitionAndPowerOnServer(ctx context.Context, req *driver.InitializeMachineRequest, serverClaim *metalv1alpha1.ServerClaim, providerSpec *apiv1alpha1.ProviderSpec, addressesMetaData map[string]any) error {
 	klog.V(3).Info("Creating ignition Secret and powering on server", "severClaimName", client.ObjectKeyFromObject(serverClaim))
 
 	nodeName, err := getNodeName(ctx, d.nodeNamePolicy, serverClaim, d.metalNamespace, d.clientProvider)
@@ -253,7 +197,7 @@ func (d *metalDriver) createIgnitionAndPowerOnServer(ctx context.Context, req *d
 		return fmt.Errorf("error extracting server metadata from ServerClaim %q: %w", client.ObjectKeyFromObject(serverClaim), err)
 	}
 
-	ignitionSecret, err := d.generateIgnitionSecret(ctx, req, nodeName, providerSpec, addressesMetaData, serverMetadata)
+	ignitionSecret, err := d.generateIgnitionSecret(ctx, req.Machine, req.MachineClass, req.Secret, nodeName, providerSpec, addressesMetaData, serverMetadata)
 	if err != nil {
 		return err
 	}
@@ -313,23 +257,4 @@ func (d *metalDriver) extractServerMetadataFromClaim(ctx context.Context, claim 
 	}
 
 	return serverMetadata, nil
-}
-
-func (d *metalDriver) getServerClaim(ctx context.Context, req *driver.InitializeMachineRequest) (*metalv1alpha1.ServerClaim, error) {
-	klog.V(3).Info("Getting ServerClaim for machine", "name", req.Machine.Name, "namespace", d.metalNamespace)
-
-	serverClaim := &metalv1alpha1.ServerClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Machine.Name,
-			Namespace: d.metalNamespace,
-		},
-	}
-
-	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
-		return metalClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim)
-	}); err != nil {
-		return nil, fmt.Errorf("failed to get ServerClaim %q: %w", client.ObjectKeyFromObject(serverClaim), err)
-	}
-
-	return serverClaim, nil
 }

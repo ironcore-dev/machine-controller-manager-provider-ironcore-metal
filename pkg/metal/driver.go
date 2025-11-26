@@ -9,11 +9,14 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/imdario/mergo"
 	apiv1alpha1 "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/v1alpha1"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/api/validation"
 	mcmclient "github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/client"
 	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/cmd"
+	"github.com/ironcore-dev/machine-controller-manager-provider-ironcore-metal/pkg/ignition"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	machinev1alpha1 "github.com/gardener/machine-controller-manager/pkg/apis/machine/v1alpha1"
 	"github.com/gardener/machine-controller-manager/pkg/util/provider/driver"
@@ -114,7 +117,7 @@ func getIPAddressClaimName(machineName, metadataKey string) string {
 	return ipAddrClaimName
 }
 
-func GetProviderSpec(machineClass *machinev1alpha1.MachineClass, secret *corev1.Secret) (*apiv1alpha1.ProviderSpec, error) {
+func getProviderSpecForMachineClass(machineClass *machinev1alpha1.MachineClass, secret *corev1.Secret) (*apiv1alpha1.ProviderSpec, error) {
 	if machineClass == nil {
 		return nil, errors.New("MachineClass is not set in request")
 	}
@@ -130,4 +133,134 @@ func GetProviderSpec(machineClass *machinev1alpha1.MachineClass, secret *corev1.
 	}
 
 	return providerSpec, nil
+}
+
+// IsServerBound checks if the server is already bound
+func (d *metalDriver) IsServerBound(ctx context.Context, serverClaim *metalv1alpha1.ServerClaim) (bool, error) {
+	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
+		return metalClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim)
+	}); err != nil {
+		return false, fmt.Errorf("failed to get ServerClaim %q: %v", serverClaim.Name, err)
+	}
+
+	return serverClaim.Spec.ServerRef != nil, nil
+}
+
+func (d *metalDriver) nodeExistsByName(ctx context.Context, nodeName string) bool {
+	nodeFound := false
+
+	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
+		nodeList := &corev1.NodeList{}
+		err := metalClient.List(ctx, nodeList)
+		if err != nil {
+			return err
+		}
+		for _, node := range nodeList.Items {
+			if node.Name == nodeName {
+				nodeFound = true
+				break
+			}
+		}
+		return nil
+	}); err != nil {
+		klog.V(3).Info("Failed to list nodes", "error", err)
+	}
+
+	return nodeFound
+}
+
+func (d *metalDriver) getServerClaimForMachine(ctx context.Context, machine *machinev1alpha1.Machine) (*metalv1alpha1.ServerClaim, error) {
+	if machine == nil {
+		return nil, fmt.Errorf("requested machine is nil")
+	}
+
+	klog.V(3).Info("Getting ServerClaim for Machine", "Machine", client.ObjectKeyFromObject(machine))
+	serverClaim := &metalv1alpha1.ServerClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machine.Name,
+			Namespace: d.metalNamespace,
+		},
+	}
+
+	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
+		return metalClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim)
+	}); err != nil {
+		return nil, fmt.Errorf("failed to get ServerClaim %q: %w", client.ObjectKeyFromObject(serverClaim), err)
+	}
+
+	return serverClaim, nil
+}
+
+// generateIgnition creates an ignition file for the machine and stores it in a secret
+func (d *metalDriver) generateIgnitionSecret(ctx context.Context,
+	machine *machinev1alpha1.Machine,
+	machineClass *machinev1alpha1.MachineClass,
+	machineSecret *corev1.Secret,
+	nodeName string,
+	providerSpec *apiv1alpha1.ProviderSpec,
+	addressesMetaData map[string]any,
+	serverMetadata *ServerMetadata) (*corev1.Secret, error) {
+	if machine == nil {
+		return nil, fmt.Errorf("machine is nil")
+	}
+	if machineClass == nil {
+		return nil, fmt.Errorf("machineClass is nil")
+	}
+	if machineSecret == nil {
+		return nil, fmt.Errorf("machineSecret is nil")
+	}
+
+	klog.V(3).Info("Generating Ignition secret for Machine", "Machine", client.ObjectKeyFromObject(machine))
+	userData, ok := machineSecret.Data["userData"]
+	if !ok {
+		return nil, fmt.Errorf("failed to find user-data in Secret %q", client.ObjectKeyFromObject(machineSecret))
+	}
+
+	if providerSpec.Metadata == nil {
+		providerSpec.Metadata = make(map[string]any)
+	}
+
+	if serverMetadata != nil {
+		metadata := map[string]any{}
+		if serverMetadata.LoopbackAddress != nil {
+			metadata["loopbackAddress"] = serverMetadata.LoopbackAddress.String()
+		}
+		if err := mergo.Merge(&providerSpec.Metadata, metadata, mergo.WithOverride); err != nil {
+			return nil, fmt.Errorf("failed to merge server metadata into provider metadata: %w", err)
+		}
+	}
+
+	if err := mergo.Merge(&providerSpec.Metadata, addressesMetaData, mergo.WithOverride); err != nil {
+		return nil, fmt.Errorf("failed to merge addresses metadata into provider metadata: %w", err)
+	}
+
+	config := &ignition.Config{
+		Hostname:         nodeName,
+		UserData:         string(userData),
+		MetaData:         providerSpec.Metadata,
+		Ignition:         providerSpec.Ignition,
+		DnsServers:       providerSpec.DnsServers,
+		IgnitionOverride: providerSpec.IgnitionOverride,
+	}
+
+	ignitionContent, err := ignition.Render(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render ignition for Machine %q: %w", client.ObjectKeyFromObject(machine), err)
+	}
+
+	ignitionData := map[string][]byte{}
+	ignitionData["ignition"] = []byte(ignitionContent)
+	ignitionSecret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      d.getIgnitionNameForMachine(ctx, machine.Name),
+			Namespace: d.metalNamespace,
+		},
+		Data: ignitionData,
+	}
+
+	return ignitionSecret, nil
 }
