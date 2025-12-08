@@ -80,7 +80,7 @@ var _ = Describe("InitializeMachine", func() {
 		})
 		Expect(err).To(HaveOccurred())
 		Expect(initializeMachineResponse).To(BeNil())
-		Expect(err).To(MatchError(status.Error(codes.Internal, fmt.Sprintf(`ServerClaim %s/%s still not bound`, ns.Name, machineName))))
+		Expect(err).To(MatchError(status.Error(codes.Internal, fmt.Sprintf(`ServerClaim %s/%s not bound`, ns.Name, machineName))))
 
 		By("patching ServerClaim with ServerRef")
 		Eventually(Update(serverClaim, func() {
@@ -445,7 +445,7 @@ var _ = Describe("InitializeMachine", func() {
 		})
 		Expect(err).To(HaveOccurred())
 		Expect(initializeMachineResponse).To(BeNil())
-		Expect(err).To(MatchError(status.Error(codes.Internal, fmt.Sprintf(`ServerClaim %s/%s still not bound`, ns.Name, machineName))))
+		Expect(err).To(MatchError(status.Error(codes.Internal, fmt.Sprintf(`ServerClaim %s/%s not bound`, ns.Name, machineName))))
 
 		By("ensuring the cleanup of the machine")
 		DeferCleanup((*drv).DeleteMachine, &driver.DeleteMachineRequest{

@@ -33,7 +33,7 @@ func (d *metalDriver) GetMachineStatus(ctx context.Context, req *driver.GetMachi
 	klog.V(3).Infof("Machine status request has been received for %q", req.Machine.Name)
 	defer klog.V(3).Infof("Machine status request has been processed for %q", req.Machine.Name)
 
-	providerSpec, err := GetProviderSpec(req.MachineClass, req.Secret)
+	providerSpec, err := getProviderSpecForMachineClass(req.MachineClass, req.Secret)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get provider spec: %v", err))
 	}
