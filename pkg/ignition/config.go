@@ -21,7 +21,7 @@ import (
 
 var (
 	//go:embed ignition.tmpl
-	IgnitionTemplate string
+	Template string
 )
 
 const (
@@ -42,7 +42,7 @@ type Config struct {
 
 func Render(config *Config) (string, error) {
 	ignitionBase := &map[string]any{}
-	if err := yaml.Unmarshal([]byte(IgnitionTemplate), ignitionBase); err != nil {
+	if err := yaml.Unmarshal([]byte(Template), ignitionBase); err != nil {
 		return "", err
 	}
 
@@ -149,9 +149,9 @@ func renderButane(dataIn []byte) (string, error) {
 		Pretty: false,
 	}
 	options.NoResourceAutoCompression = true
-	dataOut, _, err := buconfig.TranslateBytes(dataIn, options)
+	dataOut, report, err := buconfig.TranslateBytes(dataIn, options)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to render butane config: %w\nreport: %s", err, report.String())
 	}
 	return string(dataOut), nil
 }
