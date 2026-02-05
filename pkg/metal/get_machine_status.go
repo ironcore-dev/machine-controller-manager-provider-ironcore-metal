@@ -85,7 +85,7 @@ func isEmptyMachineStatusRequest(req *driver.GetMachineStatusRequest) bool {
 }
 
 func (d *metalDriver) validateIPAddressClaims(ctx context.Context, req *driver.GetMachineStatusRequest, serverClaim *metalv1alpha1.ServerClaim, providerSpec *apiv1alpha1.ProviderSpec) error {
-	klog.V(3).Info("Validating IPAddressClaims", "name", req.Machine.Name, "namespace", d.metalNamespace)
+	klog.V(3).InfoS("Validating IPAddressClaims", "name", req.Machine.Name, "namespace", d.metalNamespace)
 
 	for _, ipamConfig := range providerSpec.IPAMConfig {
 		if ipamConfig.IPAMRef == nil {
@@ -115,6 +115,6 @@ func (d *metalDriver) validateIPAddressClaims(ctx context.Context, req *driver.G
 		}
 	}
 
-	klog.V(3).Info("All IPAddressClaims are valid and bound", "name", req.Machine.Name, "namespace", d.metalNamespace)
+	klog.V(3).InfoS("All IPAddressClaims are valid and bound", "name", req.Machine.Name, "namespace", d.metalNamespace)
 	return nil
 }

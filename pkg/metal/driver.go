@@ -108,7 +108,7 @@ func getNodeName(ctx context.Context, policy cmd.NodeNamePolicy, serverClaim *me
 func getIPAddressClaimName(machineName, metadataKey string) string {
 	ipAddrClaimName := fmt.Sprintf("%s-%s", machineName, metadataKey)
 	if len(ipAddrClaimName) > utilvalidation.DNS1123SubdomainMaxLength {
-		klog.Info("IPAddressClaim name is too long, it will be shortened which can cause name collisions", "name", ipAddrClaimName)
+		klog.InfoS("IPAddressClaim name is too long, it will be shortened which can cause name collisions", "name", ipAddrClaimName)
 		ipAddrClaimName = ipAddrClaimName[:utilvalidation.DNS1123SubdomainMaxLength]
 	}
 	return ipAddrClaimName

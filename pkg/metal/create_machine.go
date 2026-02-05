@@ -33,8 +33,8 @@ func (d *metalDriver) CreateMachine(ctx context.Context, req *driver.CreateMachi
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("requested provider %q is not supported by the driver %q", req.MachineClass.Provider, apiv1alpha1.ProviderName))
 	}
 
-	klog.V(3).Info("Machine creation request has been received", "name", req.Machine.Name)
-	defer klog.V(3).Info("Machine creation request has been processed", "name", req.Machine.Name)
+	klog.V(3).InfoS("Machine creation request has been received", "name", req.Machine.Name)
+	defer klog.V(3).InfoS("Machine creation request has been processed", "name", req.Machine.Name)
 
 	providerSpec, err := GetProviderSpec(req.MachineClass, req.Secret)
 	if err != nil {
@@ -54,13 +54,13 @@ func (d *metalDriver) CreateMachine(ctx context.Context, req *driver.CreateMachi
 		}
 
 		if serverBound {
-			klog.V(3).Info("Server is already bound, removing recreate annotation", "name", serverClaim.Name, "namespace", serverClaim.Namespace)
+			klog.V(3).InfoS("Server is already bound, removing recreate annotation", "name", serverClaim.Name, "namespace", serverClaim.Namespace)
 			err = d.patchServerClaimWithRecreateAnnotation(ctx, serverClaim, false)
 			if err != nil {
 				return nil, status.Error(codes.Internal, fmt.Sprintf("failed to patch ServerClaim without recreate annotation: %v", err))
 			}
 		} else {
-			klog.V(3).Info("Server is still not bound, adding recreate annotation", "name", serverClaim.Name, "namespace", serverClaim.Namespace)
+			klog.V(3).InfoS("Server is still not bound, adding recreate annotation", "name", serverClaim.Name, "namespace", serverClaim.Namespace)
 			err = d.patchServerClaimWithRecreateAnnotation(ctx, serverClaim, true)
 			if err != nil {
 				return nil, status.Error(codes.Internal, fmt.Sprintf("failed to patch ServerClaim with recreate annotation: %v", err))
@@ -76,7 +76,7 @@ func (d *metalDriver) CreateMachine(ctx context.Context, req *driver.CreateMachi
 	}
 
 	if d.nodeExistsByName(ctx, nodeName) {
-		klog.V(3).Info("Node with the same name already exists in cluster, MCM may terminate and recreate machine", "name", nodeName)
+		klog.V(3).InfoS("Node with the same name already exists in cluster, MCM may terminate and recreate machine", "name", nodeName)
 	}
 
 	return &driver.CreateMachineResponse{
@@ -92,7 +92,7 @@ func isEmptyCreateRequest(req *driver.CreateMachineRequest) bool {
 
 // createServerClaim creates and applies a ServerClaim object with proper ignition data
 func (d *metalDriver) createServerClaim(ctx context.Context, req *driver.CreateMachineRequest, providerSpec *apiv1alpha1.ProviderSpec) (*metalv1alpha1.ServerClaim, error) {
-	klog.V(3).Info("Creating ServerClaim", "name", req.Machine.Name, "namespace", d.metalNamespace)
+	klog.V(3).InfoS("Creating ServerClaim", "name", req.Machine.Name, "namespace", d.metalNamespace)
 
 	serverClaim := &metalv1alpha1.ServerClaim{
 		TypeMeta: metav1.TypeMeta{
@@ -120,13 +120,13 @@ func (d *metalDriver) createServerClaim(ctx context.Context, req *driver.CreateM
 		return nil, fmt.Errorf("failed to create ServerClaim: %s", err.Error())
 	}
 
-	klog.V(3).Info("Successfully created ServerClaim", "name", serverClaim.Name, "namespace", serverClaim.Namespace)
+	klog.V(3).InfoS("Successfully created ServerClaim", "name", serverClaim.Name, "namespace", serverClaim.Namespace)
 	return serverClaim, nil
 }
 
 // patchServerClaimWithRecreateAnnotation patches the ServerClaim with an annotation to trigger a machine recreation
 func (d *metalDriver) patchServerClaimWithRecreateAnnotation(ctx context.Context, serverClaim *metalv1alpha1.ServerClaim, addAnnotation bool) error {
-	klog.V(3).Info("Patching ServerClaim with/-out recreate annotation", "name", serverClaim.Name, "namespace", serverClaim.Namespace, "addAnnotation", addAnnotation)
+	klog.V(3).InfoS("Patching ServerClaim with/-out recreate annotation", "name", serverClaim.Name, "namespace", serverClaim.Namespace, "addAnnotation", addAnnotation)
 
 	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
 		baseServerClaim := serverClaim.DeepCopy()
@@ -174,7 +174,7 @@ func (d *metalDriver) nodeExistsByName(ctx context.Context, nodeName string) boo
 		}
 		return nil
 	}); err != nil {
-		klog.V(3).Info("Failed to list nodes", "error", err)
+		klog.V(3).InfoS("Failed to list nodes", "error", err)
 	}
 
 	return nodeFound
