@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/coreos/butane v0.27.0
 	github.com/fsnotify/fsnotify v1.9.0
-	github.com/gardener/machine-controller-manager v0.60.0
+	github.com/gardener/machine-controller-manager v0.61.3
 	github.com/imdario/mergo v0.3.16
 	github.com/ironcore-dev/controller-utils v0.11.0
 	github.com/ironcore-dev/metal-operator v0.2.1
