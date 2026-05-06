@@ -115,7 +115,7 @@ func (d *metalDriver) createServerClaim(ctx context.Context, req *driver.CreateM
 	}
 
 	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
-		return metalClient.Patch(ctx, serverClaim, client.Apply, fieldOwner, client.ForceOwnership)
+		return metalClient.Patch(ctx, serverClaim, client.Apply, fieldOwner, client.ForceOwnership) //nolint:staticcheck // SA1019: Client.Apply() requires ApplyConfiguration types not yet provided by metal-operator
 	}); err != nil {
 		return nil, fmt.Errorf("failed to create ServerClaim: %s", err.Error())
 	}

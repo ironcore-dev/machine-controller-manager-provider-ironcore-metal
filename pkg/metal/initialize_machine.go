@@ -120,7 +120,7 @@ func (d *metalDriver) createIPAddressClaims(ctx context.Context, req *driver.Ini
 		}
 
 		if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
-			return metalClient.Patch(ctx, ipClaim, client.Apply, fieldOwner, client.ForceOwnership)
+			return metalClient.Patch(ctx, ipClaim, client.Apply, fieldOwner, client.ForceOwnership) //nolint:staticcheck // SA1019: Client.Apply() requires ApplyConfiguration types not provided by cluster-api for IPAddressClaim
 		}); err != nil {
 			return fmt.Errorf("failed to create IPAddressClaim: %s", err.Error())
 		}
@@ -259,7 +259,7 @@ func (d *metalDriver) createIgnitionAndPowerOnServer(ctx context.Context, req *d
 	}
 
 	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
-		return metalClient.Patch(ctx, ignitionSecret, client.Apply, fieldOwner, client.ForceOwnership)
+		return metalClient.Patch(ctx, ignitionSecret, client.Apply, fieldOwner, client.ForceOwnership) //nolint:staticcheck // SA1019: Client.Apply() migration deferred until ServerClaim/IPAddressClaim apply configs are available
 	}); err != nil {
 		return err
 	}
