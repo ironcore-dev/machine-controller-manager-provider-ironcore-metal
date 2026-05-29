@@ -7,7 +7,7 @@ on:
       - '**/*.md'
 jobs:
   golangci:
-    name: lint
+    name: Run linter
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -21,4 +21,4 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.11
+          version: v2.12
