@@ -4,14 +4,14 @@ go 1.26.0
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/coreos/butane v0.27.0
-	github.com/fsnotify/fsnotify v1.9.0
+	github.com/coreos/butane v0.28.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gardener/machine-controller-manager v0.61.3
 	github.com/imdario/mergo v0.3.16
 	github.com/ironcore-dev/controller-utils v0.11.0
 	github.com/ironcore-dev/metal-operator v0.5.0
-	github.com/onsi/ginkgo/v2 v2.28.3
-	github.com/onsi/gomega v1.40.0
+	github.com/onsi/ginkgo/v2 v2.29.0
+	github.com/onsi/gomega v1.41.0
 	github.com/spf13/pflag v1.0.10
 	k8s.io/api v0.35.0
 	k8s.io/apimachinery v0.35.0
