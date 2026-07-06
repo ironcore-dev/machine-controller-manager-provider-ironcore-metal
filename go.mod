@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/coreos/butane v0.28.0
+	github.com/coreos/butane v0.29.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gardener/machine-controller-manager v0.61.3
 	github.com/imdario/mergo v0.3.16
