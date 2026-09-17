@@ -16,7 +16,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -92,7 +92,7 @@ func (d *metalDriver) validateIPAddressClaims(ctx context.Context, req *driver.G
 			return fmt.Errorf("IPAMRef of an IPAMConfig %q is not set", ipamConfig.MetadataKey)
 		}
 
-		ipClaim := &capiv1beta1.IPAddressClaim{
+		ipClaim := &capiv1beta2.IPAddressClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getIPAddressClaimName(req.Machine.Name, ipamConfig.MetadataKey),
 				Namespace: d.metalNamespace,

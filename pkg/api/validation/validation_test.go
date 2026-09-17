@@ -16,7 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 )
 
 var fldPath *field.Path
@@ -106,16 +106,16 @@ var _ = Describe("validateMachineClassSpec", func() {
 
 var _ = Describe("ValidateIPAddressClaim", func() {
 	var (
-		ipClaim        *capiv1beta1.IPAddressClaim
+		ipClaim        *capiv1beta2.IPAddressClaim
 		serverClaim    *metalv1alpha1.ServerClaim
 		metalNamespace = "ns"
 		machineName    = "machine"
 	)
 
 	BeforeEach(func() {
-		ipClaim = &capiv1beta1.IPAddressClaim{
-			Status: capiv1beta1.IPAddressClaimStatus{
-				AddressRef: corev1.LocalObjectReference{Name: "ipref"},
+		ipClaim = &capiv1beta2.IPAddressClaim{
+			Status: capiv1beta2.IPAddressClaimStatus{
+				AddressRef: capiv1beta2.IPAddressReference{Name: "ipref"},
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{

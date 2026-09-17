@@ -27,7 +27,8 @@ import (
 	kuberuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	"k8s.io/utils/ptr"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -91,7 +92,7 @@ var _ = BeforeSuite(func() {
 
 	//+kubebuilder:scaffold:scheme
 	Expect(metalv1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
-	Expect(capiv1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(capiv1beta2.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
@@ -198,20 +199,28 @@ func newMachineClass(providerName string, providerSpec map[string]any) *gardener
 	}
 }
 
-func newIPRef(machineName, ns, metadataKey string, providerSpec map[string]any, address, gateway string) (*capiv1beta1.IPAddress, *capiv1beta1.IPAddressClaim) {
-	ipAddress := &capiv1beta1.IPAddress{
+func newIPRef(machineName, ns, metadataKey string, providerSpec map[string]any, address, gateway string) (*capiv1beta2.IPAddress, *capiv1beta2.IPAddressClaim) {
+	ipAddressClaimName := getIPAddressClaimName(machineName, metadataKey)
+	ipAddress := &capiv1beta2.IPAddress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-address", metadataKey),
 			Namespace: ns,
 		},
-		Spec: capiv1beta1.IPAddressSpec{
+		Spec: capiv1beta2.IPAddressSpec{
+			ClaimRef: capiv1beta2.IPAddressClaimReference{
+				Name: ipAddressClaimName,
+			},
+			PoolRef: capiv1beta2.IPPoolReference{
+				APIGroup: "ipam.cluster.x-k8s.io",
+				Kind:     "GlobalInClusterIPPool",
+				Name:     ipAddressClaimName,
+			},
 			Address: address,
-			Prefix:  24,
+			Prefix:  ptr.To(int32(24)),
 			Gateway: gateway,
 		},
 	}
-	ipAddressClaimName := getIPAddressClaimName(machineName, metadataKey)
-	ipAddressClaim := &capiv1beta1.IPAddressClaim{
+	ipAddressClaim := &capiv1beta2.IPAddressClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ipAddressClaimName,
 			Namespace: ns,

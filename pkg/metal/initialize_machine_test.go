@@ -23,8 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
-	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
@@ -147,7 +146,7 @@ var _ = Describe("InitializeMachine", func() {
 
 		providerSpec := maps.Clone(testing.SampleProviderSpec)
 
-		ipClaims := []*capiv1beta1.IPAddressClaim{}
+		ipClaims := []*capiv1beta2.IPAddressClaim{}
 		for _, pool := range []string{"pool-a", "pool-b"} {
 			ip, ipClaim := newIPRef(machineName, ns.Name, pool, providerSpec, "10.11.12.13", "10.11.12.1")
 
@@ -215,9 +214,9 @@ var _ = Describe("InitializeMachine", func() {
 						UID:        serverClaim.UID,
 					},
 				)),
-				HaveField("Spec.PoolRef", BeElementOf([]corev1.TypedLocalObjectReference{
+				HaveField("Spec.PoolRef", BeElementOf([]capiv1beta2.IPPoolReference{
 					{
-						APIGroup: ptr.To("ipam.cluster.x-k8s.io"),
+						APIGroup: "ipam.cluster.x-k8s.io",
 						Kind:     "GlobalInClusterIPPool",
 						Name:     ipClaim.Name,
 					},

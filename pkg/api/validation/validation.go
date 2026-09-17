@@ -12,7 +12,7 @@ import (
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 )
 
 const (
@@ -66,7 +66,7 @@ func validateMachineClassSpec(spec *v1alpha1.ProviderSpec, fldPath *field.Path) 
 }
 
 // ValidateIPAddressClaim validates the IPAddressClaim for a given machine
-func ValidateIPAddressClaim(ipClaim *capiv1beta1.IPAddressClaim, serverClaim *metalv1alpha1.ServerClaim, serverClaimName, serverClaimNamespace string) field.ErrorList {
+func ValidateIPAddressClaim(ipClaim *capiv1beta2.IPAddressClaim, serverClaim *metalv1alpha1.ServerClaim, serverClaimName, serverClaimNamespace string) field.ErrorList {
 	var allErrs field.ErrorList
 
 	if ipClaim.Labels == nil {

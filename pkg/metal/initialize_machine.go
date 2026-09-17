@@ -22,8 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
-	capiv1beta1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -93,9 +92,9 @@ func (d *metalDriver) createIPAddressClaims(ctx context.Context, req *driver.Ini
 			return status.Error(codes.Internal, fmt.Sprintf("IPAMRef of an IPAMConfig %q is not set", ipamConfig.MetadataKey))
 		}
 
-		ipClaim := &capiv1beta1.IPAddressClaim{
+		ipClaim := &capiv1beta2.IPAddressClaim{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: capiv1beta1.GroupVersion.String(),
+				APIVersion: capiv1beta2.GroupVersion.String(),
 				Kind:       "IPAddressClaim",
 			},
 			ObjectMeta: metav1.ObjectMeta{
@@ -106,9 +105,9 @@ func (d *metalDriver) createIPAddressClaims(ctx context.Context, req *driver.Ini
 					validation.LabelKeyServerClaimNamespace: d.metalNamespace,
 				},
 			},
-			Spec: capiv1beta1.IPAddressClaimSpec{
-				PoolRef: corev1.TypedLocalObjectReference{
-					APIGroup: ptr.To(ipamConfig.IPAMRef.APIGroup),
+			Spec: capiv1beta2.IPAddressClaimSpec{
+				PoolRef: capiv1beta2.IPPoolReference{
+					APIGroup: ipamConfig.IPAMRef.APIGroup,
 					Kind:     ipamConfig.IPAMRef.Kind,
 					Name:     ipamConfig.IPAMRef.Name,
 				},
@@ -138,7 +137,7 @@ func (d *metalDriver) collectIPAddressClaimsMetadata(ctx context.Context, req *d
 
 	for _, ipamConfig := range providerSpec.IPAMConfig {
 		ipAddrClaimName := getIPAddressClaimName(req.Machine.Name, ipamConfig.MetadataKey)
-		ipClaim := &capiv1beta1.IPAddressClaim{
+		ipClaim := &capiv1beta2.IPAddressClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ipAddrClaimName,
 				Namespace: d.metalNamespace,
@@ -155,7 +154,7 @@ func (d *metalDriver) collectIPAddressClaimsMetadata(ctx context.Context, req *d
 			return nil, fmt.Errorf("IPAddressClaim %s/%s not bound", ipClaim.Namespace, ipClaim.Name)
 		}
 
-		ipAddr := &capiv1beta1.IPAddress{
+		ipAddr := &capiv1beta2.IPAddress{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ipClaim.Status.AddressRef.Name,
 				Namespace: ipClaim.Namespace,
