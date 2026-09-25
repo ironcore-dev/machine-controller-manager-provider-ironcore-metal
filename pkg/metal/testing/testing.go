@@ -41,7 +41,7 @@ var (
 
 	SampleIgnition = map[string]any{
 		"ignition": map[string]any{
-			"version": "3.2.0",
+			"version": "3.6.0",
 		},
 		"passwd": map[string]any{
 			"users": []any{
@@ -117,7 +117,7 @@ WantedBy=multi-user.target
 
 	SampleIgnitionWithServerMetadata = map[string]any{
 		"ignition": map[string]any{
-			"version": "3.2.0",
+			"version": "3.6.0",
 		},
 		"passwd": map[string]any{
 			"users": []any{
@@ -193,7 +193,7 @@ WantedBy=multi-user.target
 
 	SampleIgnitionWithTestServerHostname = map[string]any{
 		"ignition": map[string]any{
-			"version": "3.2.0",
+			"version": "3.6.0",
 		},
 		"passwd": map[string]any{
 			"users": []any{
