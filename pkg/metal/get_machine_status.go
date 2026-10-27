@@ -77,7 +77,41 @@ func (d *metalDriver) GetMachineStatus(ctx context.Context, req *driver.GetMachi
 		return getMachineStatusResponse, status.Error(codes.Uninitialized, fmt.Sprintf("server claim %q is still not powered on, will reinitialize", req.Machine.Name))
 	}
 
+	if serverClaim.Spec.Image != providerSpec.Image {
+		if err := d.updateServerClaimImage(ctx, serverClaim, providerSpec.Image); err != nil {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to update ServerClaim image after in-place update: %v", err))
+		}
+	}
+
 	return getMachineStatusResponse, nil
+}
+
+// updateServerClaimImage patches the ServerClaim image to match the provided image.
+// This is called after a successful in-place node update: MCM reassigns the Machine to the new MachineClass
+// (carrying the new image) only once the update is complete, so an image mismatch here always means
+// the in-place update has finished and the ServerClaim must be reconciled to reflect the current server state.
+func (d *metalDriver) updateServerClaimImage(ctx context.Context, serverClaim *metalv1alpha1.ServerClaim, providerImage string) error {
+	klog.V(3).InfoS("Updating ServerClaim image after in-place update",
+		"name", serverClaim.Name,
+		"namespace", serverClaim.Namespace,
+		"oldImage", serverClaim.Spec.Image,
+		"newImage", providerImage)
+
+	baseServerClaim := serverClaim.DeepCopy()
+	serverClaim.Spec.Image = providerImage
+
+	if err := d.clientProvider.SyncClient(func(metalClient client.Client) error {
+		return metalClient.Patch(ctx, serverClaim, client.MergeFrom(baseServerClaim))
+	}); err != nil {
+		return fmt.Errorf("failed to patch ServerClaim image: %w", err)
+	}
+
+	klog.V(3).InfoS("Successfully updated ServerClaim image",
+		"name", serverClaim.Name,
+		"namespace", serverClaim.Namespace,
+		"image", providerImage)
+
+	return nil
 }
 
 func isEmptyMachineStatusRequest(req *driver.GetMachineStatusRequest) bool {
