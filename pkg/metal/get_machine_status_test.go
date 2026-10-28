@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
@@ -239,6 +240,91 @@ var _ = Describe("GetMachineStatus", func() {
 		DeferCleanup((*drv).DeleteMachine, &driver.DeleteMachineRequest{
 			Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),
 			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
+			Secret:       providerSecret,
+		})
+	})
+
+	It("should update ServerClaim image after in-place update", func(ctx SpecContext) {
+		machineIndex := 4
+		machineName := fmt.Sprintf("%s-%d", machineNamePrefix, machineIndex)
+		By("creating a server")
+		server := &metalv1alpha1.Server{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-server",
+			},
+			Spec: metalv1alpha1.ServerSpec{
+				SystemUUID: "12345",
+			},
+		}
+		Expect(k8sClient.Create(ctx, server)).To(Succeed())
+		DeferCleanup(k8sClient.Delete, server)
+
+		By("creating machine with initial image")
+		Expect((*drv).CreateMachine(ctx, &driver.CreateMachineRequest{
+			Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),
+			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
+			Secret:       providerSecret,
+		})).To(Equal(&driver.CreateMachineResponse{
+			ProviderID: fmt.Sprintf("%s://%s/%s-%d", v1alpha1.ProviderName, ns.Name, machineNamePrefix, machineIndex),
+			NodeName:   machineName,
+		}))
+
+		By("patching ServerClaim with ServerRef")
+		serverClaim := &metalv1alpha1.ServerClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: ns.Name,
+				Name:      machineName,
+			},
+		}
+		Eventually(Update(serverClaim, func() {
+			serverClaim.Spec.ServerRef = &corev1.LocalObjectReference{Name: server.Name}
+		})).Should(Succeed())
+
+		By("initializing the machine")
+		Eventually(func(g Gomega) {
+			initializeMachineResponse, err := (*drv).InitializeMachine(ctx, &driver.InitializeMachineRequest{
+				Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),
+				MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
+				Secret:       providerSecret,
+			})
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(initializeMachineResponse).To(Equal(&driver.InitializeMachineResponse{
+				ProviderID: fmt.Sprintf("%s://%s/%s-%d", v1alpha1.ProviderName, ns.Name, machineNamePrefix, machineIndex),
+				NodeName:   machineName,
+			}))
+		}).Should(Succeed())
+
+		By("ensuring the machine status returns success with initial image")
+		_, err := (*drv).GetMachineStatus(ctx, &driver.GetMachineStatusRequest{
+			Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),
+			MachineClass: newMachineClass(v1alpha1.ProviderName, testing.SampleProviderSpec),
+			Secret:       providerSecret,
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		By("verifying the ServerClaim has the initial image")
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim)).To(Succeed())
+		Expect(serverClaim.Spec.Image).To(Equal("my-image"))
+
+		By("simulating in-place update completion: calling GetMachineStatus with a new image in the MachineClass")
+		updatedProviderSpec := maps.Clone(testing.SampleProviderSpec)
+		updatedProviderSpec["image"] = "new-image"
+
+		_, err = (*drv).GetMachineStatus(ctx, &driver.GetMachineStatusRequest{
+			Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),
+			MachineClass: newMachineClass(v1alpha1.ProviderName, updatedProviderSpec),
+			Secret:       providerSecret,
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		By("verifying the ServerClaim image was updated to match the new MachineClass image")
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(serverClaim), serverClaim)).To(Succeed())
+		Expect(serverClaim.Spec.Image).To(Equal("new-image"))
+
+		By("ensuring the cleanup of the machine")
+		DeferCleanup((*drv).DeleteMachine, &driver.DeleteMachineRequest{
+			Machine:      newMachine(ns, machineNamePrefix, machineIndex, nil),
+			MachineClass: newMachineClass(v1alpha1.ProviderName, updatedProviderSpec),
 			Secret:       providerSecret,
 		})
 	})
