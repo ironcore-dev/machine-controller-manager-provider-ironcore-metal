@@ -26,7 +26,8 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 var (
@@ -72,23 +73,38 @@ func main() {
 	}
 }
 
-// startMachineReconciler builds a client for the MCM control cluster (seed cluster) and starts
-// the MachineReconciler in the background. It mirrors the control kubeconfig resolution that MCM's
-// app.Run performs, so no additional flags are needed.
+// startMachineReconciler creates a controller-runtime Manager for the MCM control cluster and registers
+// the MachineReconciler with it. The manager is started in a background goroutine.
+// It reuses MCM's --control-kubeconfig and --namespace flags so no additional flags are required.
 func startMachineReconciler(ctx context.Context, s *mcmoptions.MCServer, clientProvider *mcmclient.Provider, metalNamespace string) error {
 	restCfg, err := buildControlConfig(s.ControlKubeconfig)
 	if err != nil {
 		return fmt.Errorf("failed to build control cluster config: %w", err)
 	}
 
-	controlClient, err := client.New(restCfg, client.Options{Scheme: controlScheme})
+	mgr, err := ctrl.NewManager(restCfg, ctrl.Options{
+		Scheme: controlScheme,
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{s.Namespace: {}},
+		},
+		Metrics:                metricsserver.Options{BindAddress: "0"},
+		HealthProbeBindAddress: "0",
+	})
 	if err != nil {
-		return fmt.Errorf("failed to create control cluster client: %w", err)
+		return fmt.Errorf("failed to create control cluster manager: %w", err)
 	}
 
-	klog.V(3).InfoS("Starting MachineReconciler", "namespace", s.Namespace)
-	reconciler := metal.NewMachineReconciler(controlClient, clientProvider, metalNamespace, s.Namespace, 0)
-	go reconciler.Start(ctx)
+	reconciler := metal.NewMachineReconciler(mgr.GetClient(), clientProvider, metalNamespace)
+	if err := reconciler.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("failed to setup MachineReconciler: %w", err)
+	}
+
+	klog.V(3).InfoS("Starting MachineReconciler manager", "namespace", s.Namespace)
+	go func() {
+		if err := mgr.Start(ctx); err != nil {
+			klog.Fatalf("MachineReconciler manager failed: %v", err)
+		}
+	}()
 	return nil
 }
 

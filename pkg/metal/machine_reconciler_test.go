@@ -16,8 +16,9 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kuberuntime "k8s.io/apimachinery/pkg/runtime"
-	apimachinerytypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -60,8 +61,7 @@ var _ = Describe("MachineReconciler", func() {
 		}
 	}
 
-	newMachineWithUpdateLabel := func(ns, name, machineSetName string, machineSetUID apimachinerytypes.UID) *machinev1alpha1.Machine {
-		isController := true
+	newMachineWithUpdateLabel := func(ns, name, machineSetName string, machineSetUID types.UID) *machinev1alpha1.Machine {
 		return &machinev1alpha1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
@@ -75,7 +75,7 @@ var _ = Describe("MachineReconciler", func() {
 						Kind:       "MachineSet",
 						Name:       machineSetName,
 						UID:        machineSetUID,
-						Controller: &isController,
+						Controller: ptr.To(true),
 					},
 				},
 			},
@@ -93,6 +93,10 @@ var _ = Describe("MachineReconciler", func() {
 				Power: metalv1alpha1.PowerOn,
 			},
 		}
+	}
+
+	reconcileRequest := func(ns, machineName string) ctrl.Request {
+		return ctrl.Request{NamespacedName: types.NamespacedName{Namespace: ns, Name: machineName}}
 	}
 
 	It("should update ServerClaim image when Machine has update-result=successful label", func(ctx SpecContext) {
@@ -121,11 +125,12 @@ var _ = Describe("MachineReconciler", func() {
 		Expect(k8sClient.Create(ctx, serverClaim)).To(Succeed())
 		DeferCleanup(k8sClient.Delete, serverClaim)
 
-		By("running the reconciler sync")
+		By("running the reconciler")
 		metalClientProvider := &mcmclient.Provider{}
 		metalClientProvider.SetClient(k8sClient)
-		reconciler := NewMachineReconciler(k8sClient, metalClientProvider, ns.Name, ns.Name, 0)
-		Expect(reconciler.syncAll(ctx)).To(Succeed())
+		reconciler := NewMachineReconciler(k8sClient, metalClientProvider, ns.Name)
+		_, err := reconciler.Reconcile(ctx, reconcileRequest(ns.Name, machine.Name))
+		Expect(err).NotTo(HaveOccurred())
 
 		By("verifying the ServerClaim image was updated")
 		updatedServerClaim := &metalv1alpha1.ServerClaim{}
@@ -156,11 +161,12 @@ var _ = Describe("MachineReconciler", func() {
 		Expect(k8sClient.Create(ctx, serverClaim)).To(Succeed())
 		DeferCleanup(k8sClient.Delete, serverClaim)
 
-		By("running the reconciler sync")
+		By("running the reconciler")
 		metalClientProvider := &mcmclient.Provider{}
 		metalClientProvider.SetClient(k8sClient)
-		reconciler := NewMachineReconciler(k8sClient, metalClientProvider, ns.Name, ns.Name, 0)
-		Expect(reconciler.syncAll(ctx)).To(Succeed())
+		reconciler := NewMachineReconciler(k8sClient, metalClientProvider, ns.Name)
+		_, err := reconciler.Reconcile(ctx, reconcileRequest(ns.Name, machine.Name))
+		Expect(err).NotTo(HaveOccurred())
 
 		By("verifying the ServerClaim image is unchanged")
 		updatedServerClaim := &metalv1alpha1.ServerClaim{}
@@ -187,11 +193,12 @@ var _ = Describe("MachineReconciler", func() {
 		Expect(k8sClient.Create(ctx, serverClaim)).To(Succeed())
 		DeferCleanup(k8sClient.Delete, serverClaim)
 
-		By("running the reconciler sync")
+		By("running the reconciler")
 		metalClientProvider := &mcmclient.Provider{}
 		metalClientProvider.SetClient(k8sClient)
-		reconciler := NewMachineReconciler(k8sClient, metalClientProvider, ns.Name, ns.Name, 0)
-		Expect(reconciler.syncAll(ctx)).To(Succeed())
+		reconciler := NewMachineReconciler(k8sClient, metalClientProvider, ns.Name)
+		_, err := reconciler.Reconcile(ctx, reconcileRequest(ns.Name, machine.Name))
+		Expect(err).NotTo(HaveOccurred())
 
 		By("verifying the ServerClaim image is unchanged")
 		updatedServerClaim := &metalv1alpha1.ServerClaim{}
@@ -211,7 +218,6 @@ var _ = Describe("MachineReconciler", func() {
 		DeferCleanup(k8sClient.Delete, machineSet)
 
 		By("creating a Machine WITHOUT update-result label")
-		isController := true
 		machine := &machinev1alpha1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "machine-no-label",
@@ -222,7 +228,7 @@ var _ = Describe("MachineReconciler", func() {
 						Kind:       "MachineSet",
 						Name:       machineSet.Name,
 						UID:        machineSet.UID,
-						Controller: ptr.To(isController),
+						Controller: ptr.To(true),
 					},
 				},
 			},
@@ -235,11 +241,12 @@ var _ = Describe("MachineReconciler", func() {
 		Expect(k8sClient.Create(ctx, serverClaim)).To(Succeed())
 		DeferCleanup(k8sClient.Delete, serverClaim)
 
-		By("running the reconciler sync")
+		By("running the reconciler")
 		metalClientProvider := &mcmclient.Provider{}
 		metalClientProvider.SetClient(k8sClient)
-		reconciler := NewMachineReconciler(k8sClient, metalClientProvider, ns.Name, ns.Name, 0)
-		Expect(reconciler.syncAll(ctx)).To(Succeed())
+		reconciler := NewMachineReconciler(k8sClient, metalClientProvider, ns.Name)
+		_, err := reconciler.Reconcile(ctx, reconcileRequest(ns.Name, machine.Name))
+		Expect(err).NotTo(HaveOccurred())
 
 		By("verifying the ServerClaim image is unchanged (no update since no label)")
 		updatedServerClaim := &metalv1alpha1.ServerClaim{}
@@ -263,11 +270,11 @@ var _ = Describe("MachineReconciler", func() {
 		Expect(k8sClient.Create(ctx, machine)).To(Succeed())
 		DeferCleanup(k8sClient.Delete, machine)
 
-		By("running the reconciler sync - should not error")
+		By("running the reconciler - should not error when ServerClaim is missing")
 		metalClientProvider := &mcmclient.Provider{}
 		metalClientProvider.SetClient(k8sClient)
-		reconciler := NewMachineReconciler(k8sClient, metalClientProvider, ns.Name, ns.Name, 0)
-		// syncAll never returns an error for individual machine failures, it just logs them
-		Expect(reconciler.syncAll(ctx)).To(Succeed())
+		reconciler := NewMachineReconciler(k8sClient, metalClientProvider, ns.Name)
+		_, err := reconciler.Reconcile(ctx, reconcileRequest(ns.Name, machine.Name))
+		Expect(err).NotTo(HaveOccurred())
 	})
 })
