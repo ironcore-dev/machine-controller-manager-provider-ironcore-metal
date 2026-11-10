@@ -91,6 +91,7 @@ var _ = BeforeSuite(func() {
 	DeferCleanup(testEnv.Stop)
 
 	//+kubebuilder:scaffold:scheme
+	Expect(gardenermachinev1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(metalv1alpha1.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(capiv1beta2.AddToScheme(scheme.Scheme)).To(Succeed())
 
